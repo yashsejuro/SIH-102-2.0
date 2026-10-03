@@ -217,7 +217,7 @@ export default function MultiUploadPage() {
             <div className="upload-side">
               <div className="eyebrow">PIPELINE STATUS</div>
               <strong>{busy ? `${stage}...` : stage}</strong>
-              <span>{files.length} file{files.length === 1 ? '' : 's'} staged</span>
+              <span>{files.length} {files.length === 1 ? 'file' : 'files'} staged</span>
               <button className="button secondary" type="button" disabled={!files.length || busy} onClick={inspect}>
                 Check files
               </button>
@@ -244,8 +244,113 @@ export default function MultiUploadPage() {
           </div>
         </aside>
       </div>
-      <div className="dataset-list">{files.length ? files.map(file => { const info = inspected.find(item => item.filename === file.name); return <div className="dataset-card" key={file.name}><div><strong>{file.name}</strong><span>{file.name.toLowerCase().endsWith('.xlsx') ? 'XLSX workbook' : 'CSV dataset'} · {(file.size / 1024).toFixed(1)} KB</span></div><div className="dataset-role">{info ? <><b>{roleLabel[info.detected_role] || info.detected_role}</b><span>{info.confidence.toFixed(0)}% confidence · {info.selected_sheet || 'sheet pending'}</span><small>{info.sheets?.map(sheet => `${sheet.sheet}: ${sheet.rows.toLocaleString('en-IN')} rows`).join(' · ')}</small>{info.column_mapping?.length ? <details><summary>Detected column mapping</summary><table className="mapping-table"><thead><tr><th>Uploaded column</th><th>Canonical field</th><th>Confidence</th><th>Status</th></tr></thead><tbody>{info.column_mapping.map(mapping => <tr key={`${mapping.uploaded_column}-${mapping.canonical_field}`}><td>{mapping.uploaded_column}</td><td>{mapping.canonical_field}</td><td>{mapping.confidence.toFixed(0)}%</td><td>{mapping.status}</td></tr>)}</tbody></table></details> : null}</> : <span>Role not inspected</span>}</div><button className="remove-file" onClick={() => removeFile(file.name)} aria-label={`Remove ${file.name}`}>×</button></div>; }) : <div className="empty-state"><div className="empty-mark">+</div><strong>No datasets selected</strong><span>Select any supported CSV or Excel dataset to begin a new isolated analysis run.</span></div>}</div>
-      {result && <div className="result-panel"><div><div className="eyebrow">FILES {result.error ? 'NEED ATTENTION' : 'READY'}</div><h2>{result.error ? 'We could not use these files yet' : 'Your files are ready'}</h2></div>{result.error ? <p>{typeof result.error === 'string' ? result.error : JSON.stringify(result.error)}</p> : <><div className="result-stats"><span><strong>{String(result.files_processed || 0)}</strong> files</span><span><strong>{Number(result.rows_processed || 0).toLocaleString('en-IN')}</strong> rows</span><span><strong>{Number(result.projects_created || 0).toLocaleString('en-IN')}</strong> projects</span><span><strong>{String(result.alerts_created || 0)}</strong> review prompts</span></div>{Array.isArray(result.datasets) && <div className="dataset-list">{(result.datasets as DatasetIntegrity[]).map(dataset => { const privacy = privacyResults[dataset.id]; return <div className="dataset-card" key={dataset.id}><div><strong>{dataset.file_name}</strong><span>{dataset.algorithm}</span>{privacy && <small>{privacy.privacy_status}{privacy.columns.length ? ` · ${privacy.columns.length} sensitive column${privacy.columns.length === 1 ? '' : 's'}` : ''}</small>}</div><div><span className="signal-chip">{dataset.integrity_status === 'VERIFIED' ? 'Integrity Verified' : dataset.integrity_status === 'FAILED' ? 'Integrity Check Failed' : 'Integrity Check Not Available'}</span><button className="button ghost" type="button" disabled={privacyBusy === dataset.id} onClick={() => scanPrivacy(dataset.id)}>{privacyBusy === dataset.id ? 'Scanning...' : privacy ? 'Rescan privacy' : 'Scan privacy'}</button></div></div>; })}</div>}</>}</div>}
+      <div className="dataset-list">
+        {files.length ? (
+          files.map(file => {
+            const info = inspected.find(item => item.filename === file.name);
+            return (
+              <div className="dataset-card" key={file.name}>
+                <div>
+                  <strong>{file.name}</strong>
+                  <span>{file.name.toLowerCase().endsWith('.xlsx') ? 'XLSX workbook' : 'CSV dataset'} · {(file.size / 1024).toFixed(1)} KB</span>
+                </div>
+                <div className="dataset-role">
+                  {info ? (
+                    <>
+                      <b>{roleLabel[info.detected_role] || info.detected_role || 'Unmapped'}</b>
+                      <span> · {Math.min(100, Math.max(0, Number(info.confidence || 0))).toFixed(0)}% confidence · {info.selected_sheet || 'sheet pending'}</span>
+                      <small>{info.sheets?.map(sheet => `${sheet.sheet || 'Sheet'}: ${Number(sheet.rows || 0).toLocaleString('en-IN')} rows`).join(' · ')}</small>
+                      {info.column_mapping?.length ? (
+                        <details>
+                          <summary>Detected column mapping</summary>
+                          <table className="mapping-table">
+                            <thead>
+                              <tr>
+                                <th>Uploaded column</th>
+                                <th>Canonical field</th>
+                                <th>Confidence</th>
+                                <th>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {info.column_mapping.map(mapping => (
+                                <tr key={`${mapping.uploaded_column}-${mapping.canonical_field}`}>
+                                  <td>{mapping.uploaded_column}</td>
+                                  <td>{mapping.canonical_field}</td>
+                                  <td>{Math.min(100, Math.max(0, Number(mapping.confidence || 0))).toFixed(0)}%</td>
+                                  <td>{mapping.status}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </details>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span>Role not inspected</span>
+                  )}
+                </div>
+                <button className="remove-file" onClick={() => removeFile(file.name)} aria-label={`Remove ${file.name}`}>×</button>
+              </div>
+            );
+          })
+        ) : (
+          <div className="empty-state">
+            <div className="empty-mark">+</div>
+            <strong>No datasets selected</strong>
+            <span>Select any supported CSV or Excel dataset to begin a new isolated analysis run.</span>
+          </div>
+        )}
+      </div>
+      {result && (
+        <div className="result-panel">
+          <div>
+            <div className="eyebrow">FILES {result.error ? 'NEED ATTENTION' : 'READY'}</div>
+            <h2>{result.error ? 'We could not use these files yet' : 'Your files are ready'}</h2>
+          </div>
+          {result.error ? (
+            <p>{typeof result.error === 'string' ? result.error : JSON.stringify(result.error)}</p>
+          ) : (
+            <>
+              <div className="result-stats">
+                <span><strong>{String(result.files_processed || 0)}</strong> files</span>
+                <span><strong>{Number(result.rows_processed || 0).toLocaleString('en-IN')}</strong> rows</span>
+                <span><strong>{Number(result.projects_created || 0).toLocaleString('en-IN')}</strong> projects</span>
+                <span><strong>{String(result.alerts_created || 0)}</strong> review prompts</span>
+              </div>
+              {Array.isArray(result.datasets) && (
+                <div className="dataset-list">
+                  {(result.datasets as DatasetIntegrity[]).map(dataset => {
+                    const privacy = privacyResults[dataset.id];
+                    return (
+                      <div className="dataset-card" key={dataset.id}>
+                        <div>
+                          <strong>{dataset.file_name}</strong>
+                          <span>{dataset.algorithm}</span>
+                          {privacy && (
+                            <small>
+                              {privacy.privacy_status}
+                              {(privacy.columns && privacy.columns.length > 0) ? ` · ${privacy.columns.length} sensitive ${privacy.columns.length === 1 ? 'column' : 'columns'}` : ''}
+                            </small>
+                          )}
+                        </div>
+                        <div>
+                          <span className="signal-chip">
+                            {dataset.integrity_status === 'VERIFIED' ? 'Integrity Verified' : dataset.integrity_status === 'FAILED' ? 'Integrity Check Failed' : 'Integrity Check Not Available'}
+                          </span>
+                          <button className="button ghost" type="button" disabled={privacyBusy === dataset.id} onClick={() => scanPrivacy(dataset.id)}>
+                            {privacyBusy === dataset.id ? 'Scanning...' : privacy ? 'Rescan privacy' : 'Scan privacy'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </section>
   </div>;
 }

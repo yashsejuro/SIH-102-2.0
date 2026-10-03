@@ -8,6 +8,7 @@ import MultiUploadPage from './MultiUploadPage';
 import IntegrationPage from './IntegrationPage';
 import { API_BASE, Role, useAuth } from './auth';
 import { VoiceDictation } from './VoiceDictation';
+import LandingPage from './LandingPage';
 const levels = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 const palette: Record<string, string> = { LOW: '#48a88a', MEDIUM: '#d7a64a', HIGH: '#e4774c', CRITICAL: '#d95b67' };
 
@@ -32,9 +33,13 @@ type Alert = { id: number; project_id: number; project_name: string; severity: s
 type AuditCase = { id: number; project_id: number; title: string; priority: string; status: string; notes?: string; assigned_authority?: string; created_at?: string; updated_at?: string };
 
 const money = (value?: number) => typeof value === 'number' && Number.isFinite(value) ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value) : '—';
-const compactMoney = (value?: number) => typeof value === 'number' && Number.isFinite(value) ? new Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 1 }).format(value) : '—';
+const compactMoney = (value?: number) => typeof value === 'number' && Number.isFinite(value) ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', notation: 'compact', maximumFractionDigits: 1 }).format(value) : '—';
 const compactCurrency = (value?: number) => typeof value === 'number' && Number.isFinite(value) ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', notation: 'compact', maximumFractionDigits: 1 }).format(value) : '—';
-const pct = (value?: number) => typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : '—';
+const pct = (value?: number) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  const nonNegative = Math.max(0, value);
+  return `${(nonNegative * 100).toFixed(1)}%`;
+};
 const dateText = (value?: string) => value ? new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'Not available';
 const cx = (...parts: Array<string | false | undefined>) => parts.filter(Boolean).join(' ');
 const projectTitle = (project: Project) => {
@@ -50,7 +55,28 @@ const reviewLevel = (project: Project) => {
 };
 
 function RiskBadge({ level = 'LOW' }: { level?: string }) {
-  return <span className={cx('risk-badge', `risk-${level.toLowerCase()}`)}><span className="risk-dot" />{level}</span>;
+  const raw = String(level || 'LOW').trim();
+  let normalizedClass = raw.toLowerCase().replace(/[\s-]+/g, '_');
+  if (normalizedClass.includes('data_quality')) {
+    normalizedClass = 'data_quality_review';
+  } else if (normalizedClass === 'critical_risk' || normalizedClass === 'critical') {
+    normalizedClass = 'critical';
+  } else if (normalizedClass === 'high_risk' || normalizedClass === 'high') {
+    normalizedClass = 'high';
+  } else if (normalizedClass === 'medium_risk' || normalizedClass === 'moderate' || normalizedClass === 'medium') {
+    normalizedClass = 'medium';
+  } else if (normalizedClass === 'low_risk' || normalizedClass === 'low') {
+    normalizedClass = 'low';
+  } else {
+    normalizedClass = 'medium';
+  }
+  const displayLabel = raw.toUpperCase().replace(/_/g, ' ');
+  return (
+    <span className={cx('risk-badge', `risk-${normalizedClass}`)}>
+      <span className="risk-dot" />
+      {displayLabel}
+    </span>
+  );
 }
 function Stat({ label, value, detail, tone = 'teal' }: { label: string; value: string; detail?: string; tone?: string }) {
   return <div className="stat-block"><div className="stat-label">{label}</div><div className="stat-value">{value}</div>{detail && <div className={cx('stat-detail', `tone-${tone}`)}>{detail}</div>}</div>;
@@ -149,6 +175,13 @@ function Shell({ children }: { children: ReactNode }) {
           </Link>
         </div>
       )}
+      <div className="nav-group">
+        <div className="nav-label">PRESENTATION</div>
+        <Link to="/landing" className={cx('nav-item', location.pathname === '/landing' ? 'active' : '')}>
+          <span className="nav-number">★</span>
+          <span>SIH Project Brief</span>
+        </Link>
+      </div>
       <div className="sidebar-bottom">
         <div className="system-card">
           <div className="status-line"><span className="live-dot" />System active & verified</div>
@@ -251,7 +284,7 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
   const [hovered, setHovered] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null);
   const [generatingState, setGeneratingState] = useState<string | null>(null);
-  const [generatedCases, setGeneratedCases] = useState<Record<string, number>>({});
+  const [generatedCases, setGeneratedCases] = useState<Record<string, { id: number; priority: string; title: string }>>({});
   const leaveTimeoutRef = useRef<number | null>(null);
   const stateRows = new Map((dashboard.state_wise || []).map(row => [row.name, row]));
   const maxRisk = Math.max(...(dashboard.state_wise || []).map(row => row.average_risk || 0), 1);
@@ -278,8 +311,8 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
       const rect = container.getBoundingClientRect();
       const rawX = e.clientX - rect.left;
       const rawY = e.clientY - rect.top;
-      const tooltipWidth = 250;
-      const tooltipHeight = 260;
+      const tooltipWidth = 260;
+      const tooltipHeight = 280;
       const x = rawX + tooltipWidth + 16 > rect.width ? Math.max(8, rawX - tooltipWidth - 12) : rawX + 16;
       const y = Math.min(Math.max(8, rawY - 40), Math.max(8, rect.height - tooltipHeight));
       setCoords({ x, y });
@@ -350,24 +383,89 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
 
     setGeneratingState(stateName);
     try {
-      // Find highest risk project in this state or fallback to top project
-      const stateProjects = (dashboard.top_projects || []).filter(p => p.state === stateName);
-      const targetProject = stateProjects.sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0))[0] || dashboard.top_projects?.[0] || { id: 1, project_name: `${stateName} Field Review` };
+      // 1. Fetch real project data for this state to populate specific case details & priority
+      let candidateProject: any = null;
+      try {
+        const projRes = await axios.get(`${API_BASE}/api/projects`, {
+          params: { state: stateName, page_size: 20 }
+        });
+        const records = projRes.data?.records || projRes.data?.items || [];
+        if (records.length > 0) {
+          candidateProject = records.slice().sort((a: any, b: any) => (b.risk_score || 0) - (a.risk_score || 0))[0];
+        }
+      } catch {
+        // Fallback if projects request fails
+      }
 
+      if (!candidateProject) {
+        const stateProjects = (dashboard.top_projects || []).filter(p => p.state === stateName);
+        candidateProject = stateProjects.sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0))[0] || dashboard.top_projects?.[0] || {
+          id: 1,
+          project_name: `${stateName} State Civil Works Scheme`,
+          sanction_amount: totalSanctionedAmount,
+          expenditure: row.expenditure || 0,
+          risk_score: row.average_risk,
+          risk_level: riskLevel,
+          category: topSectors[0]?.sector || 'Community Works',
+        };
+      }
+
+      // 2. Determine priority level from project data & state metrics
+      const projectScore = typeof candidateProject.risk_score === 'number' ? candidateProject.risk_score : row.average_risk;
+      const priorityLevel = (candidateProject.risk_level === 'CRITICAL' || projectScore >= 70 || row.average_risk >= 70) ? 'CRITICAL'
+        : (candidateProject.risk_level === 'HIGH' || projectScore >= 50 || row.average_risk >= 50) ? 'HIGH'
+        : (candidateProject.risk_level === 'MEDIUM' || projectScore >= 30 || row.average_risk >= 30) ? 'MEDIUM'
+        : 'LOW';
+
+      // 3. Utilize project data to populate case details
       const diffText = isHigher ? `+${riskDiff}% higher than national average` : isLower ? `${Math.abs(riskDiff)}% below national average` : 'At national average';
       const sectorNames = topSectors.map(s => `${s.sector} (${s.count})`).join(', ');
+      const utilizationText = candidateProject.sanction_amount && candidateProject.expenditure
+        ? `${((candidateProject.expenditure / candidateProject.sanction_amount) * 100).toFixed(1)}%`
+        : candidateProject.utilization_ratio ? `${(candidateProject.utilization_ratio * 100).toFixed(1)}%` : 'N/A';
+
+      const delayText = candidateProject.delay_days !== undefined
+        ? (candidateProject.delay_days > 0 ? `${candidateProject.delay_days} days overrun` : 'On schedule')
+        : 'Timeline pending site verification';
+
+      const reasonsText = candidateProject.reasons && candidateProject.reasons.length > 0
+        ? candidateProject.reasons.join('; ')
+        : (candidateProject.primary_reason || `Outlier risk signal flagged by Isolation Forest (${projectScore.toFixed(1)}%)`);
+
+      const caseTitle = `Audit Case: [${stateName}] ${candidateProject.project_name} (${priorityLevel} Priority)`;
+
+      const notes = [
+        `Automated audit case generated from State Risk Map.`,
+        `• Target Project: ${candidateProject.project_name} (ID: ${candidateProject.id}${candidateProject.project_code ? `, Code: ${candidateProject.project_code}` : ''})`,
+        `• Jurisdiction: ${candidateProject.district ? `${candidateProject.district}, ` : ''}${stateName}`,
+        `• Category & Agency: ${candidateProject.category || topSectors[0]?.sector || 'Civil Works'} | ${candidateProject.agency || 'District Executing Authority'}`,
+        `• Priority Level: ${priorityLevel} (Score: ${projectScore.toFixed(1)}%)`,
+        `• Sanctioned: ${money(candidateProject.sanction_amount || 0)} | Expenditure: ${money(candidateProject.expenditure || 0)} (Utilization: ${utilizationText})`,
+        `• Timeline Delay: ${delayText}`,
+        `• Anomaly Indicators: ${reasonsText}`,
+        `• State Aggregate Context: ${row.projects} works monitored, ₹${(totalSanctionedAmount / 10000000).toFixed(2)} Cr total sanctions`,
+        `• Primary Sectors: ${sectorNames || 'General Infrastructure'}`,
+        `• Directive: Initiate physical inspection of Measurement Book (MB) recordings, contractor invoices, and site milestones.`
+      ].join('\n');
 
       const payload = {
-        project_id: targetProject.id,
-        title: `State Review: ${stateName} — ${row.projects} Projects (Avg Risk ${row.average_risk.toFixed(1)}%)`,
-        priority: row.average_risk >= 70 ? 'CRITICAL' : row.average_risk >= 50 ? 'HIGH' : 'MEDIUM',
-        assigned_authority: `${stateName} State Nodal Inspection Cell`,
-        notes: `Statewide audit case automatically flagged from State Risk Map.\n• State Jurisdiction: ${stateName}\n• Total Analyzed Projects: ${row.projects}\n• Average Risk Score: ${row.average_risk.toFixed(1)}% (${diffText})\n• Total Sanctioned Amount: ${money(totalSanctionedAmount)}\n• Recorded Expenditure: ${money(row.expenditure || 0)}\n• Primary Sectors: ${sectorNames || 'General'}\n• Priority Directive: Field physical verification & voucher inspection recommended for high-risk executing agencies.`,
+        project_id: candidateProject.id,
+        title: caseTitle,
+        priority: priorityLevel,
+        assigned_authority: candidateProject.agency || `${stateName} State Nodal Inspection Cell`,
+        notes,
         state: stateName,
       };
 
       const res = await axios.post(`${API_BASE}/api/audit-cases`, payload);
-      setGeneratedCases(prev => ({ ...prev, [stateName]: res.data.id }));
+      setGeneratedCases(prev => ({
+        ...prev,
+        [stateName]: {
+          id: res.data.id,
+          priority: priorityLevel,
+          title: caseTitle,
+        }
+      }));
     } catch (err) {
       console.error('Failed to create audit case for state', err);
     } finally {
@@ -490,7 +588,7 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
                   className={`state-map-review-btn ${generatedCases[hovered] ? 'created' : ''}`}
                   onClick={(e) => handleMarkForReview(e, hovered, hoveredRow)}
                   disabled={generatingState === hovered}
-                  title={`Automatically generate an Audit Case for ${hovered} using state project statistics`}
+                  title={`Automatically generate an Audit Case for ${hovered} using project statistics & anomaly data`}
                 >
                   {generatingState === hovered ? (
                     <>
@@ -504,7 +602,7 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
-                      <span>Case #{String(generatedCases[hovered]).padStart(4, '0')} Generated</span>
+                      <span>Case #{String(generatedCases[hovered].id).padStart(4, '0')} Generated</span>
                     </>
                   ) : (
                     <>
@@ -515,6 +613,15 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
                     </>
                   )}
                 </button>
+
+                {generatedCases[hovered] && (
+                  <div className="state-map-case-success">
+                    <span>Priority: <strong>{generatedCases[hovered].priority}</strong></span>
+                    <Link to="/cases" className="state-map-case-link" onClick={(e) => e.stopPropagation()}>
+                      View in Cases →
+                    </Link>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -705,16 +812,16 @@ function ProjectTable({ projects, compact = false }: { projects: Project[]; comp
                   <small>{project.project_code || `PROJECT-${project.id}`}</small>
                 </td>
                 <td>
-                  {project.state}
-                  <small>{project.district}</small>
+                  {project.state || 'Not recorded'}
+                  <small>{project.district || 'Not recorded'}</small>
                 </td>
                 <td>{project.category || 'Not recorded'}</td>
                 <td className="tabular-nums"><strong>{compactMoney(project.sanction_amount)}</strong></td>
                 <td className="tabular-nums">{compactMoney(project.expenditure)}</td>
-                <td className="tabular-nums">{pct(project.utilization_ratio)}</td>
-                <td className="tabular-nums">{project.delay_days ? `${Math.round(project.delay_days)}d` : 'None'}</td>
+                <td className="tabular-nums">{pct(typeof project.utilization_ratio === 'number' ? Math.max(0, project.utilization_ratio) : 0)}</td>
+                <td className="tabular-nums">{typeof project.delay_days === 'number' && project.delay_days > 0 ? `${Math.round(project.delay_days)}d delay` : 'On time'}</td>
                 <td className="tabular-nums">
-                  {typeof project.risk_score === 'number' && Number.isFinite(project.risk_score) ? `${project.risk_score.toFixed(1)}%` : '—'}{' '}
+                  {typeof project.risk_score === 'number' && Number.isFinite(project.risk_score) ? `${Math.min(100, Math.max(0, project.risk_score)).toFixed(1)}%` : '—'}{' '}
                   {project.ml_anomaly_flag && <span className="signal-chip">Anomaly</span>}
                 </td>
                 <td><RiskBadge level={reviewLevel(project)} /></td>
@@ -829,16 +936,16 @@ function RiskPage() {
           <option value={50}>50 per page</option>
           <option value={100}>100 per page</option>
         </select>
-        <span className="toolbar-count">{total.toLocaleString('en-IN')} matching projects</span>
+        <span className="toolbar-count">{(total || 0).toLocaleString('en-IN')} matching {total === 1 ? 'project' : 'projects'}</span>
         <button className="button secondary" onClick={() => exportProjectsCSV(projects, 'risk_intelligence_projects.csv')}>Export CSV</button>
         <button className="button ghost" onClick={() => window.print()}>Print view</button>
       </div>
       <section className="panel table-panel">
         <ProjectTable projects={projects} />
         <div className="pagination">
-          <button className="button ghost" disabled={page === 1} onClick={() => setPage(value => value - 1)}>Previous</button>
-          <span>Page {page} of {pages} · Showing {projects.length} of {total.toLocaleString('en-IN')}</span>
-          <button className="button ghost" disabled={page >= pages} onClick={() => setPage(value => value + 1)}>Next</button>
+          <button className="button ghost" disabled={page === 1 || total === 0} onClick={() => setPage(value => value - 1)}>Previous</button>
+          <span>{total > 0 ? `Page ${page} of ${pages} · Showing ${projects.length} of ${(total || 0).toLocaleString('en-IN')}` : '0 matching projects'}</span>
+          <button className="button ghost" disabled={page >= pages || total === 0} onClick={() => setPage(value => value + 1)}>Next</button>
         </div>
       </section>
     </div>
@@ -853,23 +960,23 @@ function downloadProjectReport(project: Project, explanation: any, similar: any[
   const rows = [
     ['Project ID', project.project_code || project.id],
     ['Project name', projectTitle(project)],
-    ['State', project.state],
-    ['District', project.district],
-    ['Constituency', project.constituency],
-    ['MP', project.mp_name],
-    ['Category', project.category],
-    ['Vendor', project.vendor_name],
-    ['Status', project.status],
+    ['State', project.state || 'Not recorded'],
+    ['District', project.district || 'Not recorded'],
+    ['Constituency', project.constituency || 'Not recorded'],
+    ['MP', project.mp_name || 'Not recorded'],
+    ['Category', project.category || 'Not recorded'],
+    ['Vendor', project.vendor_name || 'Not recorded'],
+    ['Status', project.status || 'Active'],
     ['Sanctioned amount', money(project.sanction_amount)],
     ['Amount spent', money(project.expenditure)],
-    ['Amount used', pct(project.utilization_ratio)],
-    ['Delay', project.delay_days ? `${Math.round(project.delay_days)} days` : 'No delay recorded'],
+    ['Amount used', pct(typeof project.utilization_ratio === 'number' ? Math.max(0, project.utilization_ratio) : undefined)],
+    ['Delay', project.delay_days && project.delay_days > 0 ? `${Math.round(project.delay_days)} days` : 'No delay recorded'],
     ['Review level', reviewLevel(project)],
-    ['Review score', typeof project.risk_score === 'number' ? `${project.risk_score.toFixed(1)}%` : '—'],
-    ['Payment status', project.payment_status],
+    ['Review score', typeof project.risk_score === 'number' && Number.isFinite(project.risk_score) ? `${Math.min(100, Math.max(0, project.risk_score)).toFixed(1)}%` : '—'],
+    ['Payment status', project.payment_status || 'Standard'],
   ];
   const issues = (explanation?.why_flagged || project.reasons || ['No specific issue recorded.']).map((item: string) => `<li>${escapeHtml(item)}</li>`).join('');
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Project report - ${escapeHtml(project.project_name)}</title><style>body{font:15px Arial;color:#173f3b;max-width:900px;margin:40px auto;line-height:1.5}h1{margin-bottom:4px}h2{border-bottom:2px solid #dce8e3;padding-bottom:8px;margin-top:28px}table{border-collapse:collapse;width:100%}td{padding:9px;border-bottom:1px solid #dce8e3}td:first-child{font-weight:700;width:32%}li{margin:8px 0}.card{background:#f5f8f6;padding:16px;border-radius:8px}</style></head><body><h1>${escapeHtml(project.project_name)}</h1><p>Project report for field review</p><h2>Project details</h2><table>${rows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join('')}</table><h2>What needs checking</h2><div class="card"><ul>${issues}</ul></div><h2>Records to request</h2><div class="card"><ul>${(explanation?.recommended_verification || ['Approval papers', 'Bills and payment records', 'Completion proof', 'Site photographs']).map((item: string) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div><h2>Comparable projects</h2><table>${similar.slice(0, 10).map(item => `<tr><td>${escapeHtml(item.project_code || item.id)}</td><td>${escapeHtml(item.project_name)}</td><td>${escapeHtml(item.state)} · ${escapeHtml(item.category)}</td><td>${escapeHtml(item.similarity)}% similar</td></tr>`).join('') || '<tr><td colspan="4">No comparable projects found.</td></tr>'}</table><p>Prepared from the uploaded project records. Review signals are prompts for checking records, not proof of wrongdoing.</p></body></html>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Project report - ${escapeHtml(project.project_name)}</title><style>body{font:15px Arial;color:#173f3b;max-width:900px;margin:40px auto;line-height:1.5}h1{margin-bottom:4px}h2{border-bottom:2px solid #dce8e3;padding-bottom:8px;margin-top:28px}table{border-collapse:collapse;width:100%}td{padding:9px;border-bottom:1px solid #dce8e3}td:first-child{font-weight:700;width:32%}li{margin:8px 0}.card{background:#f5f8f6;padding:16px;border-radius:8px}</style></head><body><h1>${escapeHtml(project.project_name)}</h1><p>Project report for field review</p><h2>Project details</h2><table>${rows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join('')}</table><h2>What needs checking</h2><div class="card"><ul>${issues}</ul></div><h2>Records to request</h2><div class="card"><ul>${(explanation?.recommended_verification || ['Approval papers', 'Bills and payment records', 'Completion proof', 'Site photographs']).map((item: string) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div><h2>Comparable projects</h2><table>${similar.slice(0, 10).map(item => `<tr><td>${escapeHtml(item.project_code || item.id)}</td><td>${escapeHtml(item.project_name)}</td><td>${escapeHtml(item.state || 'Not recorded')} · ${escapeHtml(item.category || 'General')}</td><td>${escapeHtml(Math.min(100, Math.max(0, Math.round(Number(item.similarity || 0)))))}% similar</td></tr>`).join('') || '<tr><td colspan="4">No comparable projects found.</td></tr>'}</table><p>Prepared from the uploaded project records. Review signals are prompts for checking records, not proof of wrongdoing.</p></body></html>`;
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   link.download = `${project.project_code || `project-${project.id}`}-report.html`;
@@ -888,7 +995,7 @@ function ProjectOverview({ project, explanation }: { project: Project; explanati
     { name: 'Remaining', amount: Math.max(remaining, 0) },
   ];
   const checks = explanation?.recommended_verification || ['Approval papers', 'Bills and payment records', 'Completion proof', 'Site photographs'];
-  return <><section className="panel project-intro-panel"><div className="eyebrow">PROJECT AT A GLANCE</div><div className="project-intro-grid"><div><h2>{title}</h2><p className="project-description">This is a {project.category || 'public'} project being carried out in {project.district || 'the recorded district'}, {project.state || 'the recorded state'}. It falls under {project.constituency || 'the recorded constituency'} and is linked to {project.mp_name || 'the recorded MP'}.</p><p className="project-description">The review team should confirm that the approved work, spending, supplier, progress, and completion evidence all describe the same project.</p></div><div className="project-facts"><div><span>Project number</span><strong>{project.project_code || `PROJECT-${project.id}`}</strong></div><div><span>Sector</span><strong>{project.category || 'Not recorded'}</strong></div><div><span>State</span><strong>{project.state || 'Not recorded'}</strong></div><div><span>District</span><strong>{project.district || 'Not recorded'}</strong></div><div><span>Constituency</span><strong>{project.constituency || 'Not recorded'}</strong></div><div><span>MP</span><strong>{project.mp_name || 'Not recorded'}</strong></div><div><span>Supplier</span><strong>{project.vendor_name || 'Not recorded'}</strong></div><div><span>Implementing office</span><strong>{project.agency || 'Not recorded'}</strong></div></div></div></section><div className="project-insight-grid"><section className="panel chart-panel"><div className="eyebrow">MONEY BREAKDOWN</div><h2>Approved, spent, and remaining</h2><ResponsiveContainer width="100%" height={220}><BarChart data={financialData} margin={{ left: 10, right: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="#dbe5e1" vertical={false} /><XAxis dataKey="name" tick={{ fill: '#65736e', fontSize: 11 }} /><YAxis tick={{ fill: '#65736e', fontSize: 11 }} tickFormatter={value => `₹${Math.round(Number(value) / 100000)}L`} /><Tooltip formatter={(value: any) => [money(Number(value)), 'Amount']} /><Bar dataKey="amount" fill="#238f82" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer><table className="detail-table"><tbody><tr><th>Approved amount</th><td>{money(approved)}</td></tr><tr><th>Spent so far</th><td>{money(spent)}</td></tr><tr><th>Amount left</th><td>{remaining >= 0 ? money(remaining) : 'Overspent by ' + money(Math.abs(remaining))}</td></tr><tr><th>Use of approved amount</th><td>{pct(project.utilization_ratio)}</td></tr></tbody></table></section><section className="panel"><div className="eyebrow">AUDITOR'S CHECKLIST</div><h2>What to look for</h2><div className="audit-checklist">{checks.slice(0, 6).map((item: string, index: number) => <div key={item}><span>{index + 1}</span><div><strong>{item}</strong><small>Confirm this record matches the project number, location, amount, and dates.</small></div></div>)}</div></section></div></>;
+  return <><section className="panel project-intro-panel"><div className="eyebrow">PROJECT AT A GLANCE</div><div className="project-intro-grid"><div><h2>{title}</h2><p className="project-description">This is a {project.category || 'public'} project being carried out in {project.district || 'the recorded district'}, {project.state || 'the recorded state'}. It falls under {project.constituency || 'the recorded constituency'} and is linked to {project.mp_name || 'the recorded MP'}.</p><p className="project-description">The review team should confirm that the approved work, spending, supplier, progress, and completion evidence all describe the same project.</p></div><div className="project-facts"><div><span>Project number</span><strong>{project.project_code || `PROJECT-${project.id}`}</strong></div><div><span>Sector</span><strong>{project.category || 'Not recorded'}</strong></div><div><span>State</span><strong>{project.state || 'Not recorded'}</strong></div><div><span>District</span><strong>{project.district || 'Not recorded'}</strong></div><div><span>Constituency</span><strong>{project.constituency || 'Not recorded'}</strong></div><div><span>MP</span><strong>{project.mp_name || 'Not recorded'}</strong></div><div><span>Supplier</span><strong>{project.vendor_name || 'Not recorded'}</strong></div><div><span>Implementing office</span><strong>{project.agency || 'Not recorded'}</strong></div></div></div></section><div className="project-insight-grid"><section className="panel chart-panel"><div className="eyebrow">MONEY BREAKDOWN</div><h2>Approved, spent, and remaining</h2><ResponsiveContainer width="100%" height={220}><BarChart data={financialData} margin={{ left: 10, right: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="#dbe5e1" vertical={false} /><XAxis dataKey="name" tick={{ fill: '#65736e', fontSize: 11 }} /><YAxis tick={{ fill: '#65736e', fontSize: 11 }} tickFormatter={value => `₹${Math.round(Number(value) / 100000)}L`} /><Tooltip formatter={(value: any) => [money(Number(value)), 'Amount']} /><Bar dataKey="amount" fill="#238f82" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer><table className="detail-table"><tbody><tr><th>Approved amount</th><td>{money(approved)}</td></tr><tr><th>Spent so far</th><td>{money(spent)}</td></tr><tr><th>Amount left</th><td>{remaining >= 0 ? money(remaining) : `Overspent by ${money(Math.abs(remaining))}`}</td></tr><tr><th>Use of approved amount</th><td>{pct(typeof project.utilization_ratio === 'number' ? Math.max(0, project.utilization_ratio) : undefined)}</td></tr></tbody></table></section><section className="panel"><div className="eyebrow">AUDITOR'S CHECKLIST</div><h2>What to look for</h2><div className="audit-checklist">{checks.slice(0, 6).map((item: string, index: number) => <div key={item}><span>{index + 1}</span><div><strong>{item}</strong><small>Confirm this record matches the project number, location, amount, and dates.</small></div></div>)}</div></section></div></>;
 }
 
 function ProjectDetailPage() { 
@@ -965,7 +1072,7 @@ function ProjectDetailPage() {
   const components = project.signal_components || {}; 
   const isCalamity = project.category === 'Calamity Relief' || project.calamity_type; 
   const level = reviewLevel(project);
-  const utilization = Number(project.utilization_ratio || 0);
+  const utilization = Math.max(0, Number(project.utilization_ratio || 0));
   const signalRows = [
     ['Use of funds', utilization],
     ['Delay', components.delay_score_component ?? 0],
@@ -975,7 +1082,7 @@ function ProjectDetailPage() {
     ['Missing information', components.data_quality_score_component ?? 0],
   ];
   const signalPercent = (value: unknown) => {
-    const numeric = Number(value || 0);
+    const numeric = Math.max(0, Number(value || 0));
     return `${(numeric * 100).toFixed(1)}%`;
   };
   const verificationItems = explanation?.recommended_verification || ['Approval papers', 'Bills and payment records', 'Completion proof', 'Site photographs'];
@@ -992,8 +1099,8 @@ function ProjectDetailPage() {
     <section className="panel project-header">
       <div className="eyebrow">PROJECT REPORT · {project.project_code || `PROJECT-${project.id}`}</div>
       <h1>{projectTitle(project)}</h1>
-      <p>{[project.state, project.district, project.constituency, project.category, project.mp_name && `MP: ${project.mp_name}`].filter(Boolean).join(' · ')}</p>
-      <div className="risk-summary"><div><span>Review level</span><strong>{typeof project.risk_score === 'number' ? `${project.risk_score.toFixed(1)}%` : '—'}</strong></div><span className={`badge ${level.toLowerCase()}`}>{level}</span></div>
+      <p>{[project.state, project.district, project.constituency, project.category, project.mp_name && `MP: ${project.mp_name}`].filter(Boolean).join(' · ') || 'Location details not recorded'}</p>
+      <div className="risk-summary"><div><span>Review level</span><strong>{typeof project.risk_score === 'number' && Number.isFinite(project.risk_score) ? `${Math.min(100, Math.max(0, project.risk_score)).toFixed(1)}%` : '—'}</strong></div><div style={{ display: 'flex', alignItems: 'center' }}><RiskBadge level={level} /></div></div>
     </section>
     <ProjectOverview project={project} explanation={explanation} />
 
@@ -1030,11 +1137,11 @@ function ProjectDetailPage() {
       />
     </section>
 
-    <section className="panel"><div className="eyebrow">POTENTIAL FRAUD-RISK SIGNALS</div><h2>Evidence requiring review</h2><p className="muted">{fraudRisk?.disclaimer || 'Loading review signals…'}</p>{fraudRisk?.signals?.length ? <><div className="toolbar"><select value={fraudDisposition} onChange={event => setFraudDisposition(event.target.value)}><option>Requires Evidence</option><option>Cleared</option><option>Escalated</option><option>Irregularity Confirmed</option><option>Referred for Investigation</option><option>False Positive</option></select><input placeholder="Decision reason" value={fraudReason} onChange={event => setFraudReason(event.target.value)} /><input placeholder="Evidence reference" value={fraudEvidence} onChange={event => setFraudEvidence(event.target.value)} /></div><ul className="plain-list">{fraudRisk.signals.map((item: any, index: number) => <li key={`${item.signal_code}-${index}`}><strong>{item.title}</strong> ({item.severity}, {Math.round(item.confidence * 100)}%) — {item.explanation}<small>{item.recommended_verification}</small><button className="button ghost" type="button" onClick={() => reviewFraudSignal(item.signal_code)}>Save review disposition</button></li>)}</ul></> : <EmptyState title="No potential fraud-risk signals" text="No deterministic indicator was available for this project." />}</section>
-    <section className="panel"><div className="eyebrow">PROJECT COMPLIANCE</div><h2>Review findings</h2><p className="muted">Each item is a human-review signal, not a confirmed finding.</p>{compliance.length ? <ul className="plain-list">{compliance.map((item, index) => <li key={`${item.rule_code}-${index}`}><strong>{item.title}</strong> ({item.severity}) — {item.explanation}<small>{item.recommended_action}</small></li>)}</ul> : <EmptyState title="No compliance findings" text="No deterministic compliance issue was available for this project." />}</section>
+    <section className="panel"><div className="eyebrow">POTENTIAL FRAUD-RISK SIGNALS</div><h2>Evidence requiring review</h2><p className="muted">{fraudRisk?.disclaimer || 'Loading review signals…'}</p>{fraudRisk?.signals?.length ? <><div className="toolbar"><select value={fraudDisposition} onChange={event => setFraudDisposition(event.target.value)}><option>Requires Evidence</option><option>Cleared</option><option>Escalated</option><option>Irregularity Confirmed</option><option>Referred for Investigation</option><option>False Positive</option></select><input placeholder="Decision reason" value={fraudReason} onChange={event => setFraudReason(event.target.value)} /><input placeholder="Evidence reference" value={fraudEvidence} onChange={event => setFraudEvidence(event.target.value)} /></div><ul className="plain-list">{fraudRisk.signals.map((item: any, index: number) => <li key={`${item.signal_code}-${index}`}><strong>{item.title}</strong> ({item.severity}, {Math.min(100, Math.max(0, Math.round((Number(item.confidence) || 0) * 100)))}%) — {item.explanation || 'Signal flagged for audit inspection'}<small>{item.recommended_verification || 'Verify supporting documents.'}</small><button className="button ghost" type="button" onClick={() => reviewFraudSignal(item.signal_code)}>Save review disposition</button></li>)}</ul></> : <EmptyState title="No potential fraud-risk signals" text="No deterministic indicator was available for this project." />}</section>
+    <section className="panel"><div className="eyebrow">PROJECT COMPLIANCE</div><h2>Review findings</h2><p className="muted">Each item is a human-review signal, not a confirmed finding.</p>{compliance.length ? <ul className="plain-list">{compliance.map((item, index) => <li key={`${item.rule_code}-${index}`}><strong>{item.title}</strong> ({item.severity}) — {item.explanation || 'Rule variance flagged'}<small>{item.recommended_action || 'Review record details.'}</small></li>)}</ul> : <EmptyState title="No compliance findings" text="No deterministic compliance issue was available for this project." />}</section>
     <section className="panel"><div className="eyebrow">WHY THIS PROJECT NEEDS A CLOSER LOOK</div><h2>Things to check</h2><p className="muted">Audit status: <strong>{auditFile?.audit_status || 'Not Reviewed'}</strong></p><ul className="plain-list">{(explanation?.why_flagged || project.reasons || ['No specific issue recorded.']).map((reason: string) => <li key={reason}>{reason}</li>)}</ul><div style={{ marginTop: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><h3 style={{ margin: 0 }}>Records to request</h3><span className="notice-tag">{completedChecksCount} of {verificationItems.length} verified</span></div><ul className="plain-list">{verificationItems.map((item: string) => { const completed = Boolean(auditFile?.checklist?.find((entry: any) => entry.item === item)?.completed); return <li key={item}><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}><input type="checkbox" checked={completed} onChange={event => toggleChecklist(item, event.target.checked)} /> <span style={{ textDecoration: completed ? 'line-through' : undefined, color: completed ? 'var(--muted)' : undefined }}>{item}</span></label></li>; })}</ul></div></section>
-    <section className="panel progress-panel"><div className="eyebrow">PROJECT PROGRESS</div><h2>Timeline and checks</h2><div className="metric-grid">{signalRows.map(([label, value]) => <div className="metric-card" key={label}><span>{label}</span><strong>{signalPercent(value)}</strong><div className="metric-bar"><i style={{ width: `${Math.min(100, Number(value || 0) * 100)}%` }} /></div></div>)}</div><p className="muted">{project.delay_days ? `${Math.round(project.delay_days)} days recorded between planned and actual completion.` : 'No delay recorded in the uploaded dates.'}</p></section>
-    <section className="panel comparable-panel"><div className="eyebrow">COMPARABLE PROJECTS</div><h2>Other works to compare</h2><div className="similar-list">{similar.length ? similar.slice(0, 10).map(item => <Link className="similar-item" to={`/projects/${item.id}${runId ? `?run_id=${encodeURIComponent(runId)}` : ''}`} key={item.id}><strong>{item.project_code || item.id}</strong><span>{projectTitle(item)}</span><span>{money(item.expenditure)} <b>{item.risk_level || reviewLevel(item)}</b></span></Link>) : <p className="muted">No comparable projects found.</p>}</div></section>
+    <section className="panel progress-panel"><div className="eyebrow">PROJECT PROGRESS</div><h2>Timeline and checks</h2><div className="metric-grid">{signalRows.map(([label, value]) => <div className="metric-card" key={label}><span>{label}</span><strong>{signalPercent(value)}</strong><div className="metric-bar"><i style={{ width: `${Math.min(100, Math.max(0, Number(value || 0) * 100))}%` }} /></div></div>)}</div><p className="muted">{project.delay_days && project.delay_days > 0 ? `${Math.round(project.delay_days)} days recorded between planned and actual completion.` : 'No delay recorded in the uploaded dates.'}</p></section>
+    <section className="panel comparable-panel"><div className="eyebrow">COMPARABLE PROJECTS</div><h2>Other works to compare</h2><div className="similar-list">{similar.length ? similar.slice(0, 10).map(item => <Link className="similar-item" to={`/projects/${item.id}${runId ? `?run_id=${encodeURIComponent(runId)}` : ''}`} key={item.id}><strong>{item.project_code || item.id}</strong><span>{projectTitle(item)}</span><span>{money(item.expenditure)} · <b>{item.risk_level || reviewLevel(item)}</b></span></Link>) : <p className="muted">No comparable projects found.</p>}</div></section>
 
     {/* CREATE REVIEW CASE MODAL WITH VOICE DICTATION */}
     {modal && (
@@ -1105,10 +1212,51 @@ function UploadPage() {
 
 function AlertsPage() { 
   const [alerts, setAlerts] = useState<Alert[]>([]); 
+  const [loading, setLoading] = useState(true);
   useEffect(() => { 
-    axios.get(`${API_BASE}/api/alerts`).then(response => setAlerts(response.data.items)); 
+    axios.get(`${API_BASE}/api/alerts`)
+      .then(response => setAlerts(response.data?.items || []))
+      .catch(() => setAlerts([]))
+      .finally(() => setLoading(false)); 
   }, []); 
-  return <div className="page-stack"><PageTitle eyebrow="PROJECTS TO CHECK" title="Review reminders" subtitle="These reminders point to records that may need a closer look." /><div className="alert-summary">{['CRITICAL', 'HIGH', 'MEDIUM'].map(level => <div key={level}><RiskBadge level={level} /><strong>{alerts.filter(alert => alert.severity === level).length}</strong><span>open reminders</span></div>)}</div><section className="panel alert-panel">{alerts.length ? <div className="alert-list">{alerts.map(alert => <div className="alert-row" key={alert.id}><RiskBadge level={alert.severity} /><div><strong>{alert.project_name}</strong><span>{alert.state} · {alert.district}</span></div><p>{alert.message}</p><Link to={`/projects/${alert.project_id}`} className="text-link">Open project →</Link></div>)}</div> : <EmptyState title="No reminders" text="There are no project records needing extra attention right now." />}</section></div>; 
+
+  if (loading) return <div className="page-loading">Loading review reminders...</div>;
+
+  return (
+    <div className="page-stack">
+      <PageTitle eyebrow="PROJECTS TO CHECK" title="Review reminders" subtitle="These reminders point to records that may need a closer look." />
+      <div className="alert-summary">
+        {['CRITICAL', 'HIGH', 'MEDIUM'].map(level => (
+          <div key={level} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <RiskBadge level={level} />
+            <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+              <strong>{alerts.filter(alert => (alert.severity || '').toUpperCase() === level).length}</strong>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>open reminders</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <section className="panel alert-panel">
+        {alerts.length ? (
+          <div className="alert-list">
+            {alerts.map(alert => (
+              <div className="alert-row" key={alert.id}>
+                <RiskBadge level={alert.severity} />
+                <div>
+                  <strong>{alert.project_name || 'Project record'}</strong>
+                  <span>{alert.state || 'Not recorded'} · {alert.district || 'Not recorded'}</span>
+                </div>
+                <p>{alert.message || 'Review signal identified'}</p>
+                <Link to={`/projects/${alert.project_id}`} className="text-link">Open project →</Link>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No reminders" text="There are no project records needing extra attention right now." />
+        )}
+      </section>
+    </div>
+  ); 
 }
 
 const DEMO_PERSONAS = [
@@ -1153,6 +1301,7 @@ const DEMO_PERSONAS = [
 
 function CasesPage() { 
   const [cases, setCases] = useState<AuditCase[]>([]); 
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedCase, setSelectedCase] = useState<AuditCase | null>(null);
   const [caseNotes, setCaseNotes] = useState('');
@@ -1168,12 +1317,17 @@ function CasesPage() {
   });
 
   const refresh = () => { 
-    axios.get(`${API_BASE}/api/audit-cases`).then(response => setCases(response.data.items || [])); 
+    axios.get(`${API_BASE}/api/audit-cases`)
+      .then(response => setCases(response.data.items || []))
+      .catch(() => setCases([]))
+      .finally(() => setLoading(false)); 
   }; 
 
   useEffect(() => { 
     refresh(); 
   }, []); 
+
+  if (loading) return <div className="page-loading">Loading audit cases...</div>; 
 
   const update = async (id: number, status: string) => { 
     await axios.patch(`${API_BASE}/api/audit-cases/${id}`, { status }); 
@@ -1542,6 +1696,11 @@ function LoginPage() {
   return (
     <div className="auth-page">
       <div className="auth-card">
+        <div style={{ marginBottom: 14 }}>
+          <Link to="/landing" className="text-link" style={{ fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            ← View SIH Solution Brief & Architecture
+          </Link>
+        </div>
         <header className="auth-header">
           <div className="auth-brand">
             <div className="brand-seal" aria-hidden="true">M</div>
@@ -1831,6 +1990,7 @@ function UserManagementContent() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activatingId, setActivatingId] = useState<number | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -1858,6 +2018,7 @@ function UserManagementContent() {
   }, [can]);
 
   const activate = async (id: number) => {
+    setActivatingId(id);
     try {
       await axios.patch(`${API_BASE}/api/auth/users/${id}`, { status: 'ACTIVE' });
       setSuccessMessage('Account activated successfully.');
@@ -1865,6 +2026,8 @@ function UserManagementContent() {
       refresh();
     } catch {
       setErrorMessage('Failed to activate account.');
+    } finally {
+      setActivatingId(null);
     }
   };
 
@@ -2389,12 +2552,13 @@ function UserManagementContent() {
                             className="button secondary"
                             style={{ fontSize: 11, padding: '4px 10px', height: 'auto', minHeight: 28 }}
                             onClick={() => activate(account.id)}
+                            disabled={activatingId === account.id}
                             title="Activate account for immediate sign in"
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
-                            Activate
+                            {activatingId === account.id ? 'Activating...' : 'Activate'}
                           </button>
                         ) : (
                           <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
@@ -2500,15 +2664,15 @@ function ProjectsPage() {
             Clear filters
           </button>
         )}
-        <span className="toolbar-count">{total.toLocaleString('en-IN')} matching projects</span>
+        <span className="toolbar-count">{(total || 0).toLocaleString('en-IN')} matching {total === 1 ? 'project' : 'projects'}</span>
         <button className="button secondary" onClick={() => exportProjectsCSV(projects, 'projects_register.csv')}>Export CSV</button>
       </div>
       <section className="panel table-panel">
         <ProjectTable projects={projects} />
         <div className="pagination">
-          <button className="button ghost" disabled={page === 1} onClick={() => setPage(v => v - 1)}>Previous</button>
-          <span>Page {page} of {pages} · Showing {projects.length} of {total.toLocaleString('en-IN')}</span>
-          <button className="button ghost" disabled={page >= pages} onClick={() => setPage(v => v + 1)}>Next</button>
+          <button className="button ghost" disabled={page === 1 || total === 0} onClick={() => setPage(v => v - 1)}>Previous</button>
+          <span>{total > 0 ? `Page ${page} of ${pages} · Showing ${projects.length} of ${(total || 0).toLocaleString('en-IN')}` : '0 matching projects'}</span>
+          <button className="button ghost" disabled={page >= pages || total === 0} onClick={() => setPage(v => v + 1)}>Next</button>
         </div>
       </section>
     </div>
@@ -2592,7 +2756,7 @@ function AnalyticsPage() {
             <BarChart data={categoryData} margin={{ bottom: 48, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#dbe5e1" vertical={false} />
               <XAxis dataKey="name" angle={-25} textAnchor="end" interval={0} height={70} />
-              <YAxis tickFormatter={(value) => `${(Number(value) / 1000000).toFixed(0)}M`} />
+              <YAxis tickFormatter={(value) => `₹${(Number(value) / 10000000).toFixed(1)}Cr`} />
               <Tooltip formatter={(value: any) => money(Number(value))} />
               <Bar dataKey="sanctioned" fill="#238f82" name="Sanctioned" />
               <Bar dataKey="expenditure" fill="#d6a64f" name="Expenditure" />
@@ -2635,10 +2799,10 @@ function DataQualityPage() {
     <div className="page-stack">
       <PageTitle eyebrow="DATA QUALITY" title="Evidence quality" subtitle="Inspect records that may need clarification before audit interpretation." />
       <div className="kpi-grid quality">
-        <Stat label="Records analyzed" value={quality.total_records.toLocaleString('en-IN')} />
-        <Stat label="Completeness" value={pct(quality.completeness)} detail={`${quality.total_records - quality.data_quality_records} records complete`} tone="blue" />
-        <Stat label="Validity" value={pct(quality.validity)} detail={`${quality.data_quality_records} records needing review`} tone="orange" />
-        <Stat label="Uniqueness" value={pct(quality.uniqueness)} detail={`${quality.duplicate_project_ids} duplicate IDs`} tone="red" />
+        <Stat label="Records analyzed" value={Number(quality.total_records || 0).toLocaleString('en-IN')} />
+        <Stat label="Completeness" value={pct(quality.completeness)} detail={`${Number((quality.total_records || 0) - (quality.data_quality_records || 0)).toLocaleString('en-IN')} records complete`} tone="blue" />
+        <Stat label="Validity" value={pct(quality.validity)} detail={`${Number(quality.data_quality_records || 0).toLocaleString('en-IN')} records needing review`} tone="orange" />
+        <Stat label="Uniqueness" value={pct(quality.uniqueness)} detail={`${Number(quality.duplicate_project_ids || 0).toLocaleString('en-IN')} duplicate IDs`} tone="red" />
       </div>
       <section className="panel">
         <div className="eyebrow">REVIEW QUEUE</div>
@@ -2678,7 +2842,7 @@ function AgenciesPage() {
     if (sortField === 'sanctioned') return (b.sanctioned || 0) - (a.sanctioned || 0);
     if (sortField === 'expenditure') return (b.expenditure || 0) - (a.expenditure || 0);
     if (sortField === 'delayed') return (b.delayed || 0) - (a.delayed || 0);
-    if (sortField === 'high_risk') return (b.high_risk + b.critical) - (a.high_risk + a.critical);
+    if (sortField === 'high_risk') return ((b.high_risk || 0) + (b.critical || 0)) - ((a.high_risk || 0) + (a.critical || 0));
     return 0;
   });
 
@@ -2718,22 +2882,33 @@ function AgenciesPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedAgencies.map(item => (
-                <tr key={item.name}>
-                  <td><strong>{item.name}</strong></td>
-                  <td className="tabular-nums">{item.projects}</td>
-                  <td className="tabular-nums">{money(item.sanctioned)}</td>
-                  <td className="tabular-nums">{money(item.expenditure)}</td>
-                  <td className="tabular-nums">{pct(item.average_utilization)}</td>
-                  <td className="tabular-nums">{item.delayed}</td>
-                  <td className="tabular-nums" style={{ color: (item.high_risk + item.critical) > 0 ? 'var(--crimson)' : undefined, fontWeight: (item.high_risk + item.critical) > 0 ? 700 : undefined }}>
-                    {item.high_risk + item.critical}
-                  </td>
-                  <td className="tabular-nums">
-                    <strong>{Number(item.average_risk || 0).toFixed(1)}%</strong>
+              {sortedAgencies.length ? (
+                sortedAgencies.map(item => {
+                  const combinedRisk = (item.high_risk || 0) + (item.critical || 0);
+                  return (
+                    <tr key={item.name}>
+                      <td><strong>{item.name || 'Not recorded'}</strong></td>
+                      <td className="tabular-nums">{Number(item.projects || 0).toLocaleString('en-IN')}</td>
+                      <td className="tabular-nums">{money(item.sanctioned)}</td>
+                      <td className="tabular-nums">{money(item.expenditure)}</td>
+                      <td className="tabular-nums">{pct(item.average_utilization)}</td>
+                      <td className="tabular-nums">{Number(item.delayed || 0).toLocaleString('en-IN')}</td>
+                      <td className="tabular-nums" style={{ color: combinedRisk > 0 ? 'var(--crimson)' : undefined, fontWeight: combinedRisk > 0 ? 700 : undefined }}>
+                        {combinedRisk}
+                      </td>
+                      <td className="tabular-nums">
+                        <strong>{Math.min(100, Math.max(0, Number(item.average_risk || 0))).toFixed(1)}%</strong>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={8}>
+                    <EmptyState title="No executing agencies" text="No agency performance data was identified in this run." />
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -2759,13 +2934,17 @@ function AgenciesPage() {
             <tbody>
               {vendors.length ? vendors.slice(0, 20).map(item => (
                 <tr key={item.vendor}>
-                  <td><strong>{item.vendor}</strong></td>
-                  <td className="tabular-nums">{item.projects}</td>
-                  <td className="tabular-nums">{item.concentration_percentage}%</td>
-                  <td className="tabular-nums">{item.district_count}</td>
-                  <td className="tabular-nums">{item.agency_count}</td>
-                  <td className="tabular-nums">{item.high_risk_count}/{item.critical_count}</td>
-                  <td className="tabular-nums">{item.anomaly_count}</td>
+                  <td><strong>{item.vendor || 'Unknown Vendor'}</strong></td>
+                  <td className="tabular-nums">{Number(item.projects || 0).toLocaleString('en-IN')}</td>
+                  <td className="tabular-nums">
+                    {typeof item.concentration_percentage === 'number'
+                      ? `${Math.min(100, Math.max(0, item.concentration_percentage)).toFixed(1)}%`
+                      : '—'}
+                  </td>
+                  <td className="tabular-nums">{Number(item.district_count || 0).toLocaleString('en-IN')}</td>
+                  <td className="tabular-nums">{Number(item.agency_count || 0).toLocaleString('en-IN')}</td>
+                  <td className="tabular-nums">{item.high_risk_count ?? 0} / {item.critical_count ?? 0}</td>
+                  <td className="tabular-nums">{Number(item.anomaly_count || 0).toLocaleString('en-IN')}</td>
                 </tr>
               )) : (
                 <tr>
@@ -2796,10 +2975,10 @@ function ReconciliationPage() {
     <div className="page-stack">
       <PageTitle eyebrow="FUND CHECKS" title="Fund Reconciliation Workspace" subtitle="Automated cross-reconciliation identifying expenditure exceeding sanctioned ceiling amounts." />
       <div className="kpi-grid">
-        <Stat label="Projects with Overspend" value={String(data.total_mismatches)} detail="Expenditure > Sanction" tone="red" />
+        <Stat label="Projects with Overspend" value={String(data.total_mismatches ?? mismatches.length)} detail="Expenditure > Sanction" tone="red" />
         <Stat label="Total Overrun Value" value={money(totalOverspent)} detail="Cumulative excess expenditure" tone="red" />
-        <Stat label="Audited Fields Verified" value={String(data.available_fields.length)} detail="Mathematically reconciled" tone="teal" />
-        <Stat label="Unsupplied Fields" value={String(data.unavailable_fields.length)} detail="Pending workbook join" tone="orange" />
+        <Stat label="Audited Fields Verified" value={String(data.available_fields?.length || 0)} detail="Mathematically reconciled" tone="teal" />
+        <Stat label="Unsupplied Fields" value={String(data.unavailable_fields?.length || 0)} detail="Pending workbook join" tone="orange" />
       </div>
       <section className="panel table-panel">
         <div className="panel-head">
@@ -2830,9 +3009,15 @@ function ReconciliationPage() {
 
 function DuplicatesPage() {
   const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    axios.get(`${API_BASE}/api/duplicates`).then(response => setItems(response.data.items || []));
+    axios.get(`${API_BASE}/api/duplicates`)
+      .then(response => setItems(response.data.items || []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) return <div className="page-loading">Checking duplicate candidates...</div>;
 
   return (
     <div className="page-stack">
@@ -2842,28 +3027,35 @@ function DuplicatesPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {items.map((item, index) => (
               <div
-                className="alert-row"
-                key={`${item.project_a.id}-${item.project_b.id}`}
-                style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr auto', gap: 16, alignItems: 'center' }}
+                className="alert-row duplicate-alert-row"
+                key={`${item.project_a?.id || index}-${item.project_b?.id || index}`}
+                style={{ display: 'grid', gridTemplateColumns: '110px 1fr 1fr auto', gap: 16, alignItems: 'center' }}
               >
-                <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <strong style={{ fontSize: 13, color: 'var(--deep)' }}>#{index + 1}</strong>
-                  <span style={{ fontSize: 11, color: 'var(--crimson)', fontWeight: 700 }}>{item.similarity}% match</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>·</span>
+                  <span style={{ fontSize: 11, color: 'var(--crimson)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {Math.min(100, Math.max(0, Math.round(item.similarity || 0)))}% match
+                  </span>
                 </div>
                 <div>
-                  <strong>{item.project_a.code}</strong>
-                  <span>{item.project_a.name}</span>
-                  <Link to={`/projects/${item.project_a.id}`} className="text-link" style={{ fontSize: 11, marginTop: 4, display: 'inline-block' }}>
-                    Inspect Project A →
-                  </Link>
+                  <strong>{item.project_a?.code || (item.project_a?.id ? `PROJECT-${item.project_a.id}` : 'Project A')}</strong>
+                  <span>{item.project_a?.name || 'Unnamed project'}</span>
+                  {item.project_a?.id && (
+                    <Link to={`/projects/${item.project_a.id}`} className="text-link" style={{ fontSize: 11, marginTop: 4, display: 'inline-block' }}>
+                      Inspect Project A →
+                    </Link>
+                  )}
                 </div>
                 <div>
-                  <strong>{item.project_b.code}</strong>
-                  <span>{item.project_b.name}</span>
-                  <Link to={`/projects/${item.project_b.id}`} className="text-link" style={{ fontSize: 11, marginTop: 4, display: 'inline-block' }}>
-                    Inspect Project B →
-                  </Link>
-                  <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--muted)' }}>{item.reasons.join(' · ')}</p>
+                  <strong>{item.project_b?.code || (item.project_b?.id ? `PROJECT-${item.project_b.id}` : 'Project B')}</strong>
+                  <span>{item.project_b?.name || 'Unnamed project'}</span>
+                  {item.project_b?.id && (
+                    <Link to={`/projects/${item.project_b.id}`} className="text-link" style={{ fontSize: 11, marginTop: 4, display: 'inline-block' }}>
+                      Inspect Project B →
+                    </Link>
+                  )}
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--muted)' }}>{(item.reasons || []).join(' · ') || 'Potential duplicate records identified'}</p>
                 </div>
                 <RiskBadge level={item.similarity >= 90 ? 'CRITICAL' : 'HIGH'} />
               </div>
@@ -2941,7 +3133,7 @@ function AuditCopilotPage() {
             <div className="integration-note" style={{ marginBottom: 14 }}>
               <strong>INTERPRETED AUDIT CONSTRAINTS</strong><br />
               {result.interpreted?.length ? result.interpreted.join(' · ') : 'Keyword search'}<br />
-              <strong>{result.total_count} matching projects identified</strong>
+              <strong>{Number(result.total_count ?? result.records?.length ?? 0).toLocaleString('en-IN')} matching {result.total_count === 1 ? 'project' : 'projects'} identified</strong>
             </div>
             {result.records?.length ? (
               <IntelligenceTable
@@ -2963,5 +3155,53 @@ function AuditCopilotPage() {
   );
 }
 
-function App() { return <Routes><Route path="/login" element={<LoginPage />} /><Route path="*" element={<ProtectedRoute><Shell><Routes><Route path="/" element={<DashboardPage />} /><Route path="/risk" element={<RiskPage />} /><Route path="/projects" element={<ProjectsPage />} /><Route path="/projects/:id" element={<ProjectPageBoundary><ProjectDetailPage /></ProjectPageBoundary>} /><Route path="/upload" element={<MultiUploadPage />} /><Route path="/alerts" element={<AlertsPage />} /><Route path="/cases" element={<CasesPage />} /><Route path="/analytics" element={<AnalyticsPage />} /><Route path="/agencies" element={<AgenciesPage />} /><Route path="/reconciliation" element={<ReconciliationPage />} /><Route path="/duplicates" element={<DuplicatesPage />} /><Route path="/audit-search" element={<AuditCopilotPage />} /><Route path="/integration" element={<IntegrationPage />} /><Route path="/data-quality" element={<DataQualityPage />} /><Route path="/users" element={<UserManagementPage />} /></Routes></Shell></ProtectedRoute>} /></Routes>; }
+function RootRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="page-loading">Checking secure session...</div>;
+  if (!user) return <LandingPage />;
+  return (
+    <ProtectedRoute>
+      <Shell>
+        <DashboardPage />
+      </Shell>
+    </ProtectedRoute>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<RootRoute />} />
+      <Route path="/landing" element={<LandingPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="*"
+        element={
+          <ProtectedRoute>
+            <Shell>
+              <Routes>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/risk" element={<RiskPage />} />
+                <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/projects/:id" element={<ProjectPageBoundary><ProjectDetailPage /></ProjectPageBoundary>} />
+                <Route path="/upload" element={<MultiUploadPage />} />
+                <Route path="/alerts" element={<AlertsPage />} />
+                <Route path="/cases" element={<CasesPage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/agencies" element={<AgenciesPage />} />
+                <Route path="/reconciliation" element={<ReconciliationPage />} />
+                <Route path="/duplicates" element={<DuplicatesPage />} />
+                <Route path="/audit-search" element={<AuditCopilotPage />} />
+                <Route path="/integration" element={<IntegrationPage />} />
+                <Route path="/data-quality" element={<DataQualityPage />} />
+                <Route path="/users" element={<UserManagementPage />} />
+              </Routes>
+            </Shell>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  );
+}
 export default App;
