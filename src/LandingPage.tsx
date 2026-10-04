@@ -232,7 +232,7 @@ export default function LandingPage() {
           {/* Live System Metrics Bar */}
           <div className="landing-metrics-bar">
             <div className="landing-metric-item">
-              <span className="landing-metric-num">{liveStats?.totalProjects || '180+'}</span>
+              <span className="landing-metric-num">{liveStats?.totalProjects ? Number(liveStats.totalProjects).toLocaleString('en-IN') : '180+'}</span>
               <span className="landing-metric-label">Sanctioned Works Monitored</span>
             </div>
             <div className="landing-metric-divider" />
@@ -244,7 +244,7 @@ export default function LandingPage() {
             </div>
             <div className="landing-metric-divider" />
             <div className="landing-metric-item">
-              <span className="landing-metric-num">{liveStats?.highRiskCount || '11'}</span>
+              <span className="landing-metric-num">{liveStats?.highRiskCount ? Number(liveStats.highRiskCount).toLocaleString('en-IN') : '11'}</span>
               <span className="landing-metric-label">Flagged for Priority Audit</span>
             </div>
             <div className="landing-metric-divider" />

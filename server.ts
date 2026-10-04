@@ -773,6 +773,95 @@ app.get('/api/dashboard', (req, res) => {
     { range: '>180 Days', projects: filtered.filter(p => p.delay_days > 180).length },
   ];
 
+  // District wise aggregates
+  const districtsMap: Record<string, {
+    district: string;
+    state: string;
+    projects: number;
+    sanctioned: number;
+    expenditure: number;
+    riskSum: number;
+    high_risk: number;
+    critical: number;
+    categories: Record<string, number>;
+    delays: number;
+    anomalies: number;
+  }> = {};
+
+  for (const p of filtered) {
+    const key = `${p.state}:::${p.district || 'Unassigned'}`;
+    if (!districtsMap[key]) {
+      districtsMap[key] = {
+        district: p.district || 'Unassigned',
+        state: p.state,
+        projects: 0,
+        sanctioned: 0,
+        expenditure: 0,
+        riskSum: 0,
+        high_risk: 0,
+        critical: 0,
+        categories: {},
+        delays: 0,
+        anomalies: 0,
+      };
+    }
+    const d = districtsMap[key];
+    d.projects += 1;
+    d.sanctioned += p.sanction_amount;
+    d.expenditure += p.expenditure;
+    d.riskSum += p.risk_score;
+    if (p.category) d.categories[p.category] = (d.categories[p.category] || 0) + 1;
+    if (p.risk_level === 'HIGH') d.high_risk += 1;
+    if (p.risk_level === 'CRITICAL') d.critical += 1;
+    if (p.delay_days && p.delay_days > 0) d.delays += 1;
+    if (p.risk_score >= 50) d.anomalies += 1;
+  }
+
+  // If a state is selected, ensure all known districts for this state from STATE_DISTRICTS exist
+  if (stateFilter && STATE_DISTRICTS[stateFilter]) {
+    for (const dist of STATE_DISTRICTS[stateFilter]) {
+      const key = `${stateFilter}:::${dist}`;
+      if (!districtsMap[key]) {
+        districtsMap[key] = {
+          district: dist,
+          state: stateFilter,
+          projects: 0,
+          sanctioned: 0,
+          expenditure: 0,
+          riskSum: 0,
+          high_risk: 0,
+          critical: 0,
+          categories: {},
+          delays: 0,
+          anomalies: 0,
+        };
+      }
+    }
+  }
+
+  const district_wise = Object.values(districtsMap).map(d => ({
+    district: d.district,
+    state: d.state,
+    projects: d.projects,
+    sanctioned: d.sanctioned,
+    expenditure: d.expenditure,
+    utilization_ratio: d.sanctioned > 0 ? Number((d.expenditure / d.sanctioned).toFixed(3)) : 0,
+    average_risk: d.projects > 0 ? Number((d.riskSum / d.projects).toFixed(1)) : 0,
+    high_risk: d.high_risk,
+    critical: d.critical,
+    risk_level: d.projects > 0 ? (
+      (d.riskSum / d.projects) >= 70 ? 'CRITICAL' :
+      (d.riskSum / d.projects) >= 50 ? 'HIGH' :
+      (d.riskSum / d.projects) >= 30 ? 'MEDIUM' : 'LOW'
+    ) : 'LOW',
+    delays_count: d.delays,
+    anomalies_count: d.anomalies,
+    top_sectors: Object.entries(d.categories)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([sector, count]) => ({ sector, count })),
+  })).sort((a, b) => b.average_risk - a.average_risk);
+
   const topProjects = [...filtered].sort((a, b) => b.risk_score - a.risk_score).slice(0, 10);
   const nationalRiskSum = filtered.reduce((acc, p) => acc + (p.risk_score || 0), 0);
   const nationalAverageRisk = filtered.length ? Number((nationalRiskSum / filtered.length).toFixed(1)) : 0;
@@ -789,7 +878,7 @@ app.get('/api/dashboard', (req, res) => {
     risk_distribution: riskDist,
     alert_distribution: { CRITICAL: critical, HIGH: highRisk, MEDIUM: riskDist.MEDIUM },
     state_wise,
-    district_wise: [],
+    district_wise,
     category_wise,
     risk_score_distribution,
     utilization_distribution,
@@ -802,6 +891,108 @@ app.get('/api/dashboard', (req, res) => {
   });
 });
 
+// 2b. District-Level Risk Intelligence
+app.get('/api/districts', (req, res) => {
+  const state = req.query.state as string;
+  const districtQuery = (req.query.district as string || '').toLowerCase().trim();
+  let filtered = projects;
+  if (state) {
+    filtered = filtered.filter(p => p.state === state);
+  }
+  if (districtQuery) {
+    filtered = filtered.filter(p => p.district.toLowerCase() === districtQuery);
+  }
+
+  const districtsMap: Record<string, {
+    district: string;
+    state: string;
+    projects: number;
+    sanctioned: number;
+    expenditure: number;
+    riskSum: number;
+    high_risk: number;
+    critical: number;
+    categories: Record<string, number>;
+    delays: number;
+    anomalies: number;
+  }> = {};
+
+  for (const p of filtered) {
+    const key = `${p.state}:::${p.district || 'Unassigned'}`;
+    if (!districtsMap[key]) {
+      districtsMap[key] = {
+        district: p.district || 'Unassigned',
+        state: p.state,
+        projects: 0,
+        sanctioned: 0,
+        expenditure: 0,
+        riskSum: 0,
+        high_risk: 0,
+        critical: 0,
+        categories: {},
+        delays: 0,
+        anomalies: 0,
+      };
+    }
+    const d = districtsMap[key];
+    d.projects += 1;
+    d.sanctioned += p.sanction_amount;
+    d.expenditure += p.expenditure;
+    d.riskSum += p.risk_score;
+    if (p.category) d.categories[p.category] = (d.categories[p.category] || 0) + 1;
+    if (p.risk_level === 'HIGH') d.high_risk += 1;
+    if (p.risk_level === 'CRITICAL') d.critical += 1;
+    if (p.delay_days && p.delay_days > 0) d.delays += 1;
+    if (p.risk_score >= 50) d.anomalies += 1;
+  }
+
+  if (state && STATE_DISTRICTS[state]) {
+    for (const dist of STATE_DISTRICTS[state]) {
+      const key = `${state}:::${dist}`;
+      if (!districtsMap[key]) {
+        districtsMap[key] = {
+          district: dist,
+          state,
+          projects: 0,
+          sanctioned: 0,
+          expenditure: 0,
+          riskSum: 0,
+          high_risk: 0,
+          critical: 0,
+          categories: {},
+          delays: 0,
+          anomalies: 0,
+        };
+      }
+    }
+  }
+
+  const result = Object.values(districtsMap).map(d => ({
+    district: d.district,
+    state: d.state,
+    projects: d.projects,
+    sanctioned: d.sanctioned,
+    expenditure: d.expenditure,
+    utilization_ratio: d.sanctioned > 0 ? Number((d.expenditure / d.sanctioned).toFixed(3)) : 0,
+    average_risk: d.projects > 0 ? Number((d.riskSum / d.projects).toFixed(1)) : 0,
+    high_risk: d.high_risk,
+    critical: d.critical,
+    risk_level: d.projects > 0 ? (
+      (d.riskSum / d.projects) >= 70 ? 'CRITICAL' :
+      (d.riskSum / d.projects) >= 50 ? 'HIGH' :
+      (d.riskSum / d.projects) >= 30 ? 'MEDIUM' : 'LOW'
+    ) : 'LOW',
+    delays_count: d.delays,
+    anomalies_count: d.anomalies,
+    top_sectors: Object.entries(d.categories)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([sector, count]) => ({ sector, count })),
+  })).sort((a, b) => b.average_risk - a.average_risk);
+
+  res.json({ state: state || 'All', items: result, total: result.length });
+});
+
 // 3. Projects List & Details
 app.get('/api/projects', (req, res) => {
   const page = parseInt(req.query.page as string, 10) || 1;
@@ -809,6 +1000,7 @@ app.get('/api/projects', (req, res) => {
   const query = (req.query.search as string || '').toLowerCase().trim();
   const risk_level = req.query.risk_level as string;
   const state = req.query.state as string;
+  const district = (req.query.district as string || '').toLowerCase().trim();
   const category = req.query.category as string;
 
   let filtered = projects;
@@ -825,6 +1017,7 @@ app.get('/api/projects', (req, res) => {
   }
   if (risk_level) filtered = filtered.filter(p => p.risk_level === risk_level);
   if (state) filtered = filtered.filter(p => p.state === state);
+  if (district) filtered = filtered.filter(p => p.district.toLowerCase() === district);
   if (category) filtered = filtered.filter(p => p.category === category);
 
   const total = filtered.length;

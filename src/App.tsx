@@ -2,13 +2,14 @@ import React, { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } fro
 import { Link, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import indiaMap from '@svg-maps/india';
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './index.css';
 import MultiUploadPage from './MultiUploadPage';
 import IntegrationPage from './IntegrationPage';
 import { API_BASE, Role, useAuth } from './auth';
 import { VoiceDictation } from './VoiceDictation';
 import LandingPage from './LandingPage';
+import { STATE_BBOXES, STATE_DISTRICTS, getDistrictCoordinates, generateDistrictCellPath } from './mapData';
 const levels = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 const palette: Record<string, string> = { LOW: '#48a88a', MEDIUM: '#d7a64a', HIGH: '#e4774c', CRITICAL: '#d95b67' };
 
@@ -280,16 +281,39 @@ function useDashboardFilters() {
   return { filters, change };
 }
 
-function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; selected: string; onSelect: (state: string) => void }) {
+function StateMap({
+  dashboard,
+  selected,
+  selectedDistrict = '',
+  onSelect,
+  onSelectDistrict,
+  onHoverState,
+}: {
+  dashboard: Dashboard;
+  selected: string;
+  selectedDistrict?: string;
+  onSelect: (state: string) => void;
+  onSelectDistrict?: (district: string) => void;
+  onHoverState?: (state: string | null) => void;
+}) {
   const [hovered, setHovered] = useState<string | null>(null);
+  const [hoveredDistrict, setHoveredDistrict] = useState<any | null>(null);
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null);
   const [generatingState, setGeneratingState] = useState<string | null>(null);
   const [generatedCases, setGeneratedCases] = useState<Record<string, { id: number; priority: string; title: string }>>({});
   const leaveTimeoutRef = useRef<number | null>(null);
+  const isInsideTooltipRef = useRef(false);
+  const hoveredRef = useRef<string | null>(null);
+  hoveredRef.current = hovered;
+  const hoveredDistrictRef = useRef<any | null>(null);
+  hoveredDistrictRef.current = hoveredDistrict;
   const stateRows = new Map((dashboard.state_wise || []).map(row => [row.name, row]));
   const maxRisk = Math.max(...(dashboard.state_wise || []).map(row => row.average_risk || 0), 1);
   const locations = (indiaMap as any).locations || [];
   const hoveredRow = hovered ? stateRows.get(hovered) : null;
+
+  const isDrilledDown = Boolean(selected && STATE_BBOXES[selected]);
+  const targetBBox = selected && STATE_BBOXES[selected] ? STATE_BBOXES[selected] : null;
 
   const nationalAvgRisk = useMemo(() => {
     if (typeof (dashboard as any).national_average_risk === 'number') {
@@ -301,33 +325,252 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
     return totalProjects > 0 ? Number((totalRiskWeighted / totalProjects).toFixed(1)) : 0;
   }, [dashboard]);
 
-  const handleMouseMove = (e: React.MouseEvent<SVGElement>, stateName: string) => {
+  // Smooth animated viewBox transitions
+  const targetVB = useMemo<{ x: number; y: number; w: number; h: number }>(() => {
+    if (!targetBBox) return { x: 0, y: 0, w: 612, h: 696 };
+    const pad = Math.max(targetBBox.width, targetBBox.height) * 0.16;
+    const targetW = targetBBox.width + 2 * pad;
+    const targetH = targetBBox.height + 2 * pad;
+    const aspect = 612 / 696;
+    let bW = targetW;
+    let bH = targetH;
+    if (bW / bH > aspect) {
+      bH = bW / aspect;
+    } else {
+      bW = bH * aspect;
+    }
+    const cx = (targetBBox.minX + targetBBox.maxX) / 2;
+    const cy = (targetBBox.minY + targetBBox.maxY) / 2;
+    return {
+      x: cx - bW / 2,
+      y: cy - bH / 2,
+      w: bW,
+      h: bH,
+    };
+  }, [targetBBox]);
+
+  const [currentVB, setCurrentVB] = useState<{ x: number; y: number; w: number; h: number }>(targetVB);
+  const [zoomPhase, setZoomPhase] = useState<'national' | 'zooming-in' | 'zoomed' | 'zooming-out'>(
+    targetBBox ? 'zoomed' : 'national'
+  );
+  const currentVBRef = useRef(currentVB);
+  currentVBRef.current = currentVB;
+
+  useEffect(() => {
+    const startVB = { ...currentVBRef.current };
+    const destVB = { ...targetVB };
+
+    const dx = Math.abs(startVB.x - destVB.x);
+    const dy = Math.abs(startVB.y - destVB.y);
+    const dw = Math.abs(startVB.w - destVB.w);
+    const dh = Math.abs(startVB.h - destVB.h);
+    if (dx < 0.2 && dy < 0.2 && dw < 0.2 && dh < 0.2) {
+      setZoomPhase(targetBBox ? 'zoomed' : 'national');
+      return;
+    }
+
+    const isZoomingIn = Boolean(targetBBox);
+    setZoomPhase(isZoomingIn ? 'zooming-in' : 'zooming-out');
+
+    let rafId: number;
+    const startTime = performance.now();
+    const duration = 620; // ms smooth cinematic zoom
+
+    const easeInOutCubic = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    const step = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, Math.max(0, elapsed / duration));
+      const ease = easeInOutCubic(progress);
+
+      const nextVB = {
+        x: startVB.x + (destVB.x - startVB.x) * ease,
+        y: startVB.y + (destVB.y - startVB.y) * ease,
+        w: startVB.w + (destVB.w - startVB.w) * ease,
+        h: startVB.h + (destVB.h - startVB.h) * ease,
+      };
+
+      currentVBRef.current = nextVB;
+      setCurrentVB(nextVB);
+
+      if (progress < 1) {
+        rafId = requestAnimationFrame(step);
+      } else {
+        setZoomPhase(isZoomingIn ? 'zoomed' : 'national');
+      }
+    };
+
+    rafId = requestAnimationFrame(step);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [targetVB, targetBBox]);
+
+  const activeViewBoxStr = `${currentVB.x.toFixed(1)} ${currentVB.y.toFixed(1)} ${currentVB.w.toFixed(1)} ${currentVB.h.toFixed(1)}`;
+  const boxW = currentVB.w;
+
+  // Get district list and stats for selected state
+  const stateDistricts = useMemo(() => {
+    if (!selected) return [];
+    const fromDashboard = (dashboard.district_wise || []).filter(
+      (d: any) => d.state && d.state.toLowerCase() === selected.toLowerCase()
+    );
+    if (fromDashboard.length > 0) return fromDashboard;
+
+    // Fallback if not yet returned from API
+    const known = STATE_DISTRICTS[selected] || [];
+    return known.map(name => ({
+      district: name,
+      state: selected,
+      projects: 0,
+      sanctioned: 0,
+      expenditure: 0,
+      utilization_ratio: 0,
+      average_risk: 0,
+      high_risk: 0,
+      critical: 0,
+      risk_level: 'LOW',
+      delays_count: 0,
+      anomalies_count: 0,
+      top_sectors: [],
+    }));
+  }, [selected, dashboard.district_wise]);
+
+  const selectedLoc = useMemo(() => {
+    if (!selected) return null;
+    return locations.find((l: any) => l.name.toLowerCase() === selected.toLowerCase()) || null;
+  }, [selected, locations]);
+
+  // Handle Escape key to zoom out
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (selectedDistrict) {
+          onSelectDistrict?.('');
+        } else if (selected) {
+          onSelect('');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selected, selectedDistrict, onSelect, onSelectDistrict]);
+
+  const handleStateMouseEnter = (e: React.MouseEvent<SVGElement>, stateName: string) => {
+    if (isDrilledDown) return;
+    if (isInsideTooltipRef.current) return;
+
     if (leaveTimeoutRef.current) {
       clearTimeout(leaveTimeoutRef.current);
       leaveTimeoutRef.current = null;
     }
-    const container = e.currentTarget.closest('.map-wrap');
-    if (container) {
-      const rect = container.getBoundingClientRect();
-      const rawX = e.clientX - rect.left;
-      const rawY = e.clientY - rect.top;
-      const tooltipWidth = 260;
-      const tooltipHeight = 280;
-      const x = rawX + tooltipWidth + 16 > rect.width ? Math.max(8, rawX - tooltipWidth - 12) : rawX + 16;
-      const y = Math.min(Math.max(8, rawY - 40), Math.max(8, rect.height - tooltipHeight));
-      setCoords({ x, y });
+
+    // Anchor tooltip once on entering the state to eliminate jitter and mouse-chasing
+    if (hoveredRef.current !== stateName) {
+      const container = e.currentTarget.closest('.map-wrap');
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const rawX = e.clientX - rect.left;
+        const rawY = e.clientY - rect.top;
+        const tooltipWidth = 265;
+        const tooltipHeight = 310;
+        const placeLeft = rawX > rect.width * 0.52;
+        const x = placeLeft
+          ? Math.max(12, rawX - tooltipWidth - 20)
+          : Math.min(rect.width - tooltipWidth - 12, rawX + 22);
+        const y = Math.min(Math.max(12, rawY - 50), Math.max(12, rect.height - tooltipHeight - 12));
+        setCoords({ x, y });
+      }
+      setHovered(stateName);
+      setHoveredDistrict(null);
+      onHoverState?.(stateName);
     }
-    setHovered(stateName);
+  };
+
+  const handleStateMouseMove = (e: React.MouseEvent<SVGElement>, stateName: string) => {
+    if (isDrilledDown) return;
+    if (isInsideTooltipRef.current) return;
+
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+      leaveTimeoutRef.current = null;
+    }
+
+    if (hoveredRef.current !== stateName) {
+      handleStateMouseEnter(e, stateName);
+    }
+  };
+
+  const handleDistrictMouseEnter = (e: React.MouseEvent, district: any) => {
+    e.stopPropagation();
+    if (isInsideTooltipRef.current) return;
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+      leaveTimeoutRef.current = null;
+    }
+
+    if (!hoveredDistrictRef.current || hoveredDistrictRef.current.district !== district.district) {
+      const container = (e.currentTarget as HTMLElement).closest('.map-wrap');
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const rawX = e.clientX - rect.left;
+        const rawY = e.clientY - rect.top;
+        const tooltipWidth = 270;
+        const tooltipHeight = 295;
+        const placeLeft = rawX > rect.width * 0.52;
+        const x = placeLeft
+          ? Math.max(12, rawX - tooltipWidth - 20)
+          : Math.min(rect.width - tooltipWidth - 12, rawX + 22);
+        const y = Math.min(Math.max(12, rawY - 50), Math.max(12, rect.height - tooltipHeight - 12));
+        setCoords({ x, y });
+      }
+      setHoveredDistrict(district);
+    }
+  };
+
+  const handleDistrictMouseMove = (e: React.MouseEvent, district: any) => {
+    e.stopPropagation();
+    if (isInsideTooltipRef.current) return;
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+      leaveTimeoutRef.current = null;
+    }
+    if (!hoveredDistrictRef.current || hoveredDistrictRef.current.district !== district.district) {
+      handleDistrictMouseEnter(e, district);
+    }
+  };
+
+  const handleDistrictMouseLeave = () => {
+    if (isInsideTooltipRef.current) return;
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+    }
+    leaveTimeoutRef.current = window.setTimeout(() => {
+      if (!isInsideTooltipRef.current) {
+        setHoveredDistrict(null);
+        setCoords(null);
+      }
+    }, 750);
   };
 
   const handleMouseLeave = () => {
+    if (isInsideTooltipRef.current) return;
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+    }
     leaveTimeoutRef.current = window.setTimeout(() => {
-      setHovered(null);
-      setCoords(null);
-    }, 280);
+      if (!isInsideTooltipRef.current) {
+        setHovered(null);
+        setHoveredDistrict(null);
+        setCoords(null);
+        onHoverState?.(null);
+      }
+    }, 750);
   };
 
   const handleTooltipMouseEnter = () => {
+    isInsideTooltipRef.current = true;
     if (leaveTimeoutRef.current) {
       clearTimeout(leaveTimeoutRef.current);
       leaveTimeoutRef.current = null;
@@ -335,10 +578,18 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
   };
 
   const handleTooltipMouseLeave = () => {
+    isInsideTooltipRef.current = false;
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+    }
     leaveTimeoutRef.current = window.setTimeout(() => {
-      setHovered(null);
-      setCoords(null);
-    }, 280);
+      if (!isInsideTooltipRef.current) {
+        setHovered(null);
+        setHoveredDistrict(null);
+        setCoords(null);
+        onHoverState?.(null);
+      }
+    }, 550);
   };
 
   const topSectors = useMemo(() => {
@@ -377,13 +628,16 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
   const isHigher = riskDiff > 0.1;
   const isLower = riskDiff < -0.1;
 
+  // Selected State details for comparison
+  const selectedStateRow = selected ? stateRows.get(selected) : null;
+  const selectedStateAvgRisk = selectedStateRow ? selectedStateRow.average_risk : nationalAvgRisk;
+
   const handleMarkForReview = async (e: React.MouseEvent, stateName: string, row: any) => {
     e.stopPropagation();
     if (generatingState) return;
 
     setGeneratingState(stateName);
     try {
-      // 1. Fetch real project data for this state to populate specific case details & priority
       let candidateProject: any = null;
       try {
         const projRes = await axios.get(`${API_BASE}/api/projects`, {
@@ -403,21 +657,19 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
           id: 1,
           project_name: `${stateName} State Civil Works Scheme`,
           sanction_amount: totalSanctionedAmount,
-          expenditure: row.expenditure || 0,
-          risk_score: row.average_risk,
+          expenditure: row?.expenditure || 0,
+          risk_score: row?.average_risk || 0,
           risk_level: riskLevel,
           category: topSectors[0]?.sector || 'Community Works',
         };
       }
 
-      // 2. Determine priority level from project data & state metrics
-      const projectScore = typeof candidateProject.risk_score === 'number' ? candidateProject.risk_score : row.average_risk;
-      const priorityLevel = (candidateProject.risk_level === 'CRITICAL' || projectScore >= 70 || row.average_risk >= 70) ? 'CRITICAL'
-        : (candidateProject.risk_level === 'HIGH' || projectScore >= 50 || row.average_risk >= 50) ? 'HIGH'
-        : (candidateProject.risk_level === 'MEDIUM' || projectScore >= 30 || row.average_risk >= 30) ? 'MEDIUM'
+      const projectScore = typeof candidateProject.risk_score === 'number' ? candidateProject.risk_score : (row?.average_risk || 0);
+      const priorityLevel = (candidateProject.risk_level === 'CRITICAL' || projectScore >= 70 || (row?.average_risk || 0) >= 70) ? 'CRITICAL'
+        : (candidateProject.risk_level === 'HIGH' || projectScore >= 50 || (row?.average_risk || 0) >= 50) ? 'HIGH'
+        : (candidateProject.risk_level === 'MEDIUM' || projectScore >= 30 || (row?.average_risk || 0) >= 30) ? 'MEDIUM'
         : 'LOW';
 
-      // 3. Utilize project data to populate case details
       const diffText = isHigher ? `+${riskDiff}% higher than national average` : isLower ? `${Math.abs(riskDiff)}% below national average` : 'At national average';
       const sectorNames = topSectors.map(s => `${s.sector} (${s.count})`).join(', ');
       const utilizationText = candidateProject.sanction_amount && candidateProject.expenditure
@@ -443,7 +695,7 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
         `• Sanctioned: ${money(candidateProject.sanction_amount || 0)} | Expenditure: ${money(candidateProject.expenditure || 0)} (Utilization: ${utilizationText})`,
         `• Timeline Delay: ${delayText}`,
         `• Anomaly Indicators: ${reasonsText}`,
-        `• State Aggregate Context: ${row.projects} works monitored, ₹${(totalSanctionedAmount / 10000000).toFixed(2)} Cr total sanctions`,
+        `• State Aggregate Context: ${row?.projects || 0} works monitored, ₹${(totalSanctionedAmount / 10000000).toFixed(2)} Cr total sanctions`,
         `• Primary Sectors: ${sectorNames || 'General Infrastructure'}`,
         `• Directive: Initiate physical inspection of Measurement Book (MB) recordings, contractor invoices, and site milestones.`
       ].join('\n');
@@ -475,14 +727,232 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
 
   return (
     <div className="map-wrap">
-      <div className="map-legend">
-        <span>Lower risk</span>
-        <i className="legend-low" />
-        <i className="legend-mid" />
-        <i className="legend-high" />
-        <span>Higher risk</span>
-      </div>
-      {hovered && (
+      {/* Drill-down Navigation Header */}
+      {isDrilledDown ? (
+        <div className="drilldown-bar">
+          <div className="drilldown-breadcrumbs">
+            <button
+              type="button"
+              className="drilldown-crumb-btn"
+              onClick={() => {
+                onSelect('');
+                onSelectDistrict?.('');
+              }}
+              title="Return to full India overview"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+              <span>National Map</span>
+            </button>
+            <span className="drilldown-separator">❯</span>
+            <span style={{ color: 'var(--deep)' }}>{selected}</span>
+            {selectedDistrict && (
+              <>
+                <span className="drilldown-separator">❯</span>
+                <span style={{ color: 'var(--teal)', fontWeight: 700 }}>{selectedDistrict} District</span>
+              </>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className={`state-map-review-btn ${generatedCases[selected] ? 'created' : ''}`}
+              style={{ width: 'auto', height: 28, minHeight: 28, fontSize: 11, padding: '0 10px' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                const row = stateRows.get(selected);
+                handleMarkForReview(e, selected, row);
+              }}
+              disabled={generatingState === selected}
+              title={`Generate an Audit Case for ${selected}`}
+            >
+              {generatingState === selected ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="spin-icon">
+                    <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
+                  </svg>
+                  <span>Generating...</span>
+                </>
+              ) : generatedCases[selected] ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Case #{String(generatedCases[selected].id).padStart(4, '0')}</span>
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                  <span>Mark for Review</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              className="drilldown-back-btn"
+              onClick={() => {
+                onSelect('');
+                onSelectDistrict?.('');
+              }}
+              title="Zoom out to National India Map (Esc)"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+              <span>Zoom Out to India</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="map-legend">
+          <span>Lower risk</span>
+          <i className="legend-low" />
+          <i className="legend-mid" />
+          <i className="legend-high" />
+          <span>Higher risk</span>
+        </div>
+      )}
+
+      {/* District quick selection pills inside state */}
+      {isDrilledDown && stateDistricts.length > 0 && (
+        <div className="drilldown-district-pills">
+          <button
+            type="button"
+            className={`district-pill ${!selectedDistrict ? 'active' : ''}`}
+            onClick={() => onSelectDistrict?.('')}
+            title="Inspect all districts in this state"
+          >
+            All Districts ({stateDistricts.length})
+          </button>
+          {stateDistricts.map(d => {
+            const isDistSelected = selectedDistrict === d.district;
+            return (
+              <button
+                key={d.district}
+                type="button"
+                className={`district-pill ${isDistSelected ? 'active' : ''}`}
+                onClick={() => onSelectDistrict?.(isDistSelected ? '' : d.district)}
+                title={`Filter to ${d.district} (${d.average_risk.toFixed(1)}% avg risk)`}
+              >
+                <span className="pill-dot" style={{ background: palette[d.risk_level] || '#0d9488' }} />
+                <span>{d.district}</span>
+                {d.projects > 0 && <small style={{ opacity: 0.75, fontSize: 10 }}>({d.projects})</small>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* District Tooltip (when drilled down) */}
+      {hoveredDistrict && isDrilledDown && (
+        <div
+          key={`dist-${hoveredDistrict.district}`}
+          className="state-map-tooltip"
+          style={{
+            left: coords ? `${coords.x}px` : '12px',
+            top: coords ? `${coords.y}px` : '12px',
+          }}
+          role="tooltip"
+          aria-live="polite"
+          onMouseEnter={handleTooltipMouseEnter}
+          onMouseLeave={handleTooltipMouseLeave}
+        >
+          <div className="state-map-tooltip-header">
+            <span className="state-map-tooltip-title">{hoveredDistrict.district} District</span>
+            <span
+              className="state-map-tooltip-badge"
+              style={{
+                background: palette[hoveredDistrict.risk_level] || '#48a88a',
+                color: '#ffffff',
+              }}
+            >
+              {hoveredDistrict.risk_level}
+            </span>
+          </div>
+
+          <div className="state-map-tooltip-stats">
+            <div>
+              <span className="state-map-tooltip-stat-label">Projects</span>
+              <div className="state-map-tooltip-stat-val">{(hoveredDistrict.projects || 0).toLocaleString('en-IN')}</div>
+            </div>
+            <div>
+              <span className="state-map-tooltip-stat-label">Avg Risk</span>
+              <div className="state-map-tooltip-stat-val state-map-tooltip-risk-val">
+                <span style={{ color: palette[hoveredDistrict.risk_level] || '#48a88a' }}>
+                  {(hoveredDistrict.average_risk || 0).toFixed(1)}%
+                </span>
+                {(() => {
+                  const distDiff = Number(((hoveredDistrict.average_risk || 0) - selectedStateAvgRisk).toFixed(1));
+                  const isUp = distDiff > 0.1;
+                  const isDown = distDiff < -0.1;
+                  return (
+                    <span
+                      className={`state-map-trend-indicator ${isUp ? 'trend-up' : isDown ? 'trend-down' : 'trend-neutral'}`}
+                      title={`State avg: ${selectedStateAvgRisk.toFixed(1)}% (${isUp ? `+${distDiff}% vs state` : isDown ? `${Math.abs(distDiff)}% vs state` : 'Equal'})`}
+                    >
+                      {isUp ? <span>+{distDiff}%</span> : isDown ? <span>{distDiff}%</span> : <span>—</span>}
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+
+          <div className="state-map-tooltip-sanctioned">
+            <span className="state-map-tooltip-stat-label">Sanctioned & Utilization</span>
+            <div className="state-map-tooltip-sanctioned-val">
+              <span className="total-sanctioned-amount">{compactMoney(hoveredDistrict.sanctioned || 0)}</span>
+              <span className="total-sanctioned-compact">
+                ({pct(hoveredDistrict.utilization_ratio || 0)} spent)
+              </span>
+            </div>
+          </div>
+
+          <div className="state-map-tooltip-sectors">
+            <div className="state-map-tooltip-sectors-title">Top Sectors</div>
+            {hoveredDistrict.top_sectors && hoveredDistrict.top_sectors.length > 0 ? (
+              <div className="state-map-tooltip-sector-list">
+                {hoveredDistrict.top_sectors.map((s: any, idx: number) => (
+                  <div className="state-map-tooltip-sector-item" key={s.sector || idx}>
+                    <span className="state-map-tooltip-sector-name">
+                      <span style={{ opacity: 0.6, marginRight: 4 }}>{idx + 1}.</span>
+                      {s.sector}
+                    </span>
+                    <span className="state-map-tooltip-sector-count">
+                      {s.count} {s.count === 1 ? 'work' : 'works'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', padding: '2px 0' }}>
+                Standard infrastructure sector mix
+              </div>
+            )}
+          </div>
+
+          <div className="state-map-tooltip-actions">
+            <button
+              type="button"
+              className="state-map-review-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectDistrict?.(selectedDistrict === hoveredDistrict.district ? '' : hoveredDistrict.district);
+              }}
+            >
+              {selectedDistrict === hoveredDistrict.district ? 'Clear District Filter' : `Inspect ${hoveredDistrict.district} Projects →`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* State Tooltip (when in National mode) */}
+      {hovered && !isDrilledDown && !hoveredDistrict && (
         <div
           key={hovered}
           className="state-map-tooltip"
@@ -497,17 +967,34 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
         >
           <div className="state-map-tooltip-header">
             <span className="state-map-tooltip-title">{hovered}</span>
-            {hoveredRow && (
-              <span
-                className="state-map-tooltip-badge"
-                style={{
-                  background: palette[riskLevel] || '#48a88a',
-                  color: '#ffffff',
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {hoveredRow && (
+                <span
+                  className="state-map-tooltip-badge"
+                  style={{
+                    background: palette[riskLevel] || '#48a88a',
+                    color: '#ffffff',
+                  }}
+                >
+                  {riskLevel}
+                </span>
+              )}
+              <button
+                type="button"
+                className="state-map-tooltip-close"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHovered(null);
+                  setHoveredDistrict(null);
+                  setCoords(null);
+                  onHoverState?.(null);
                 }}
+                title="Dismiss preview"
+                aria-label="Close"
               >
-                {riskLevel}
-              </span>
-            )}
+                ✕
+              </button>
+            </div>
           </div>
 
           {hoveredRow ? (
@@ -581,12 +1068,19 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
                 )}
               </div>
 
-              {/* MARK FOR REVIEW ACTION */}
+              {/* ACTION: DRILL DOWN HINT & MARK FOR REVIEW */}
               <div className="state-map-tooltip-actions">
+                <div style={{ fontSize: 10, color: '#f2c66d', marginBottom: 6, fontWeight: 600 }}>
+                  🔍 Click to zoom into {hovered} districts
+                </div>
                 <button
                   type="button"
                   className={`state-map-review-btn ${generatedCases[hovered] ? 'created' : ''}`}
-                  onClick={(e) => handleMarkForReview(e, hovered, hoveredRow)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleMarkForReview(e, hovered, hoveredRow);
+                  }}
                   disabled={generatingState === hovered}
                   title={`Automatically generate an Audit Case for ${hovered} using project statistics & anomaly data`}
                 >
@@ -631,48 +1125,640 @@ function StateMap({ dashboard, selected, onSelect }: { dashboard: Dashboard; sel
           )}
         </div>
       )}
+
+      {/* SVG Interactive Map */}
       <svg
-        className="india-map"
-        viewBox={(indiaMap as any).viewBox}
+        className={`india-map ${isDrilledDown ? 'drilled-down' : ''}`}
+        viewBox={activeViewBoxStr}
         role="img"
-        aria-label="Interactive India state risk map"
+        aria-label={isDrilledDown ? `Zoomed district map of ${selected}` : 'Interactive India state risk map'}
         onMouseLeave={handleMouseLeave}
       >
+        <defs>
+          <filter id="state-zoom-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#0d9488" floodOpacity="0.3" />
+          </filter>
+          {selectedLoc && (
+            <clipPath id={`state-clip-${selectedLoc.id}`}>
+              <path d={selectedLoc.path} />
+            </clipPath>
+          )}
+        </defs>
+
+        {/* 1. Base Map Layer: All states with smooth transition */}
         {locations.map((location: any) => {
           const row = stateRows.get(location.name);
           const intensity = row ? Math.min((row.average_risk || 0) / maxRisk, 1) : 0;
           const isSelected = selected === location.name;
-          const fill = isSelected ? '#f2c66d' : `rgba(28, 124, 112, ${0.2 + intensity * 0.75})`;
+
+          if (isSelected) {
+            return (
+              <path
+                key={location.id}
+                d={location.path}
+                fill="rgba(244, 251, 249, 0.96)"
+                stroke="#0d9488"
+                strokeWidth={Math.max(1.8, boxW * 0.0055)}
+                strokeLinejoin="round"
+                className="state-shape state-shape-selected"
+                filter="url(#state-zoom-glow)"
+                aria-label={location.name}
+                onClick={() => onSelect('')}
+              />
+            );
+          }
+
+          const normalFill = `rgba(28, 124, 112, ${0.2 + intensity * 0.75})`;
           return (
             <path
               key={location.id}
               d={location.path}
-              fill={fill}
-              className="state-shape"
-              onMouseEnter={(e) => handleMouseMove(e, location.name)}
-              onMouseMove={(e) => handleMouseMove(e, location.name)}
+              fill={isDrilledDown ? '#f1f5f9' : normalFill}
+              stroke={isDrilledDown ? '#cbd5e1' : '#ffffff'}
+              strokeWidth={isDrilledDown ? 0.6 : 0.8}
+              opacity={isDrilledDown ? 0.35 : 1}
+              className={`state-shape ${isDrilledDown ? 'state-ghosted' : ''}`}
+              aria-label={location.name}
+              onMouseEnter={(e) => handleStateMouseEnter(e, location.name)}
+              onMouseMove={(e) => handleStateMouseMove(e, location.name)}
               onMouseLeave={handleMouseLeave}
-              onClick={() => onSelect(isSelected ? '' : location.name)}
+              onClick={() => {
+                if (!isDrilledDown) {
+                  onSelect(location.name);
+                }
+              }}
+            />
+          );
+        })}
+
+        {/* 2. Clipped District Territories Inside State */}
+        {selectedLoc && isDrilledDown && (
+          <g clipPath={`url(#state-clip-${selectedLoc.id})`}>
+            {stateDistricts.map((d, idx) => {
+              const coord = getDistrictCoordinates(selected, d.district, idx, stateDistricts.length);
+              const radiusX = Math.max(16, (targetBBox?.width || 100) * 0.24);
+              const radiusY = Math.max(16, (targetBBox?.height || 100) * 0.24);
+              const cellPath = generateDistrictCellPath(coord.x, coord.y, radiusX, radiusY, idx);
+              const isHovered = hoveredDistrict?.district === d.district;
+              const isDistSelected = selectedDistrict === d.district;
+              const color = palette[d.risk_level] || '#0d9488';
+              return (
+                <path
+                  key={`territory-${selected}-${d.district}`}
+                  d={cellPath}
+                  fill={color}
+                  fillOpacity={isDistSelected ? 0.45 : isHovered ? 0.35 : 0.2}
+                  stroke={color}
+                  strokeWidth={isDistSelected ? 2 : isHovered ? 1.5 : 0.75}
+                  strokeOpacity={0.6}
+                  className={`district-territory animated-entry ${isDistSelected ? 'selected' : ''}`}
+                  style={{
+                    animationDelay: `${80 + idx * 50}ms`,
+                    transformOrigin: `${coord.x}px ${coord.y}px`,
+                  }}
+                  aria-label={d.district}
+                  onMouseEnter={(e) => handleDistrictMouseEnter(e, d)}
+                  onMouseMove={(e) => handleDistrictMouseMove(e, d)}
+                  onMouseLeave={handleDistrictMouseLeave}
+                  onClick={() => onSelectDistrict?.(isDistSelected ? '' : d.district)}
+                />
+              );
+            })}
+          </g>
+        )}
+
+        {/* 3. Unclipped District Interactive Nodes & Labels Animating into Position */}
+        {isDrilledDown && stateDistricts.map((d, idx) => {
+          const coord = getDistrictCoordinates(selected, d.district, idx, stateDistricts.length);
+          const isDistSelected = selectedDistrict === d.district;
+          const isHovered = hoveredDistrict?.district === d.district;
+          const color = palette[d.risk_level] || '#0d9488';
+          const isUrgent = d.risk_level === 'CRITICAL' || d.risk_level === 'HIGH' || d.average_risk >= 50;
+          const pinRadius = isDistSelected ? 8 : isHovered ? 7.5 : 6;
+          const labelWidth = Math.max(70, d.district.length * 6.5 + 24);
+          const labelY = coord.y - pinRadius - 10;
+
+          // Compute trajectory offset from state center so nodes visibly fan out into position
+          const stateCenterX = targetBBox?.centerX ?? coord.x;
+          const stateCenterY = targetBBox?.centerY ?? coord.y;
+          const fromCenterX = (stateCenterX - coord.x) * 0.42;
+          const fromCenterY = (stateCenterY - coord.y) * 0.42;
+
+          return (
+            <g
+              key={`node-${selected}-${d.district}`}
+              className={`district-node-group animated-entry ${zoomPhase === 'zooming-out' ? 'exiting' : ''}`}
+              style={{
+                '--node-dx': `${fromCenterX.toFixed(1)}px`,
+                '--node-dy': `${fromCenterY.toFixed(1)}px`,
+                animationDelay: `${120 + idx * 65}ms`,
+                transformOrigin: `${coord.x}px ${coord.y}px`,
+              } as React.CSSProperties}
+              onMouseEnter={(e) => handleDistrictMouseEnter(e, d)}
+              onMouseMove={(e) => handleDistrictMouseMove(e, d)}
+              onMouseLeave={handleDistrictMouseLeave}
+              onClick={() => onSelectDistrict?.(isDistSelected ? '' : d.district)}
             >
-              <title>{location.name}: {row ? `${row.projects} projects, avg risk ${row.average_risk.toFixed(1)}%` : 'No analyzed projects'}</title>
-            </path>
+              {/* Outer pulse indicator for high-risk / critical districts */}
+              {isUrgent && (
+                <circle
+                  cx={coord.x}
+                  cy={coord.y}
+                  r={pinRadius + 6}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={1.5}
+                  className="district-pulse-ring"
+                />
+              )}
+
+              {/* Marker Pin Circle */}
+              <circle
+                cx={coord.x}
+                cy={coord.y}
+                r={pinRadius}
+                fill={color}
+                stroke="#ffffff"
+                strokeWidth={isDistSelected ? 2.5 : 1.5}
+                className="district-node-pin"
+              />
+
+              {/* Center Dot for selected district */}
+              {isDistSelected && (
+                <circle
+                  cx={coord.x}
+                  cy={coord.y}
+                  r={3}
+                  fill="#ffffff"
+                />
+              )}
+
+              {/* District Label Pill */}
+              <g transform={`translate(${coord.x}, ${labelY})`}>
+                <rect
+                  x={-labelWidth / 2}
+                  y={-14}
+                  width={labelWidth}
+                  height={18}
+                  rx={9}
+                  fill="rgba(14, 38, 34, 0.92)"
+                  stroke={isDistSelected ? '#f2c66d' : isHovered ? '#7ee0c4' : 'rgba(255, 255, 255, 0.25)'}
+                  strokeWidth={isDistSelected ? 1.5 : 0.8}
+                />
+                <text
+                  x={0}
+                  y={-2}
+                  textAnchor="middle"
+                  fill="#ffffff"
+                  fontSize={8.5}
+                  fontWeight={700}
+                  className="district-node-badge"
+                >
+                  {d.district} {d.average_risk > 0 ? `· ${d.average_risk.toFixed(0)}%` : ''}
+                </text>
+              </g>
+            </g>
           );
         })}
       </svg>
+
       <div className="map-note">
-        {selected ? (
-          <span>Selected state: <strong style={{ color: 'var(--deep)' }}>{selected}</strong> (Click to deselect)</span>
+        {isDrilledDown ? (
+          <span>
+            Drilled down into <strong style={{ color: 'var(--deep)' }}>{selected}</strong> ({stateDistricts.length} districts).{' '}
+            {selectedDistrict ? (
+              <>Focusing on <strong style={{ color: 'var(--teal)' }}>{selectedDistrict}</strong>. <button type="button" onClick={() => onSelectDistrict?.('')} style={{ background: 'none', border: 'none', color: 'var(--teal)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>Show all districts</button></>
+            ) : (
+              <span>Click a district to focus, or click Zoom Out to return to India.</span>
+            )}
+          </span>
+        ) : selected ? (
+          <span>Selected state: <strong style={{ color: 'var(--deep)' }}>{selected}</strong> (Click to deselect or drill down)</span>
         ) : (
-          <span>Hover or select a state to inspect jurisdictional risk concentration.</span>
+          <span>Hover or click a state on the map to drill down into district-level risk statistics.</span>
         )}
       </div>
     </div>
   );
 }
 
+// --------------------------------------------------------------------------
+// DISTRICT RISK STATISTICS WORKSPACE
+// --------------------------------------------------------------------------
+function DistrictRiskWorkspace({
+  selectedState,
+  selectedDistrict,
+  onSelectDistrict,
+  districts,
+  stateRow,
+  nationalAvgRisk,
+  onExportCSV,
+  isExporting,
+}: {
+  selectedState: string;
+  selectedDistrict: string;
+  onSelectDistrict: (district: string) => void;
+  districts: any[];
+  stateRow: any;
+  nationalAvgRisk: number;
+  onExportCSV: () => void;
+  isExporting: boolean;
+}) {
+  const [sortBy, setSortBy] = useState<'risk' | 'projects' | 'sanctioned'>('risk');
+
+  const sortedDistricts = useMemo(() => {
+    return [...districts].sort((a, b) => {
+      if (sortBy === 'projects') return (b.projects || 0) - (a.projects || 0);
+      if (sortBy === 'sanctioned') return (b.sanctioned || 0) - (a.sanctioned || 0);
+      return (b.average_risk || 0) - (a.average_risk || 0);
+    });
+  }, [districts, sortBy]);
+
+  const stateAvgRisk = stateRow?.average_risk || 0;
+  const totalStateProjects = stateRow?.projects || districts.reduce((sum, d) => sum + (d.projects || 0), 0);
+  const totalStateSanctioned = stateRow?.sanctioned || districts.reduce((sum, d) => sum + (d.sanctioned || 0), 0);
+  const totalHighRisk = stateRow?.high_risk || districts.reduce((sum, d) => sum + (d.high_risk || 0) + (d.critical || 0), 0);
+  const totalCritical = stateRow?.critical || districts.reduce((sum, d) => sum + (d.critical || 0), 0);
+
+  // Chart data sorted by risk
+  const chartData = useMemo(() => {
+    return [...districts].sort((a, b) => (b.average_risk || 0) - (a.average_risk || 0)).map(d => ({
+      district: d.district,
+      risk: Number((d.average_risk || 0).toFixed(1)),
+      projects: d.projects || 0,
+      risk_level: d.risk_level || 'LOW',
+      sanctioned: d.sanctioned || 0,
+    }));
+  }, [districts]);
+
+  return (
+    <div className="district-stats-workspace">
+      {/* Workspace Header */}
+      <div className="district-workspace-header">
+        <div className="district-workspace-title">
+          <div className="eyebrow" style={{ color: 'var(--teal)' }}>DISTRICT RISK INTELLIGENCE</div>
+          <h2>{selectedState} District Breakdown</h2>
+          <p>
+            Detailed risk metrics, anomaly concentration, and fund utilization tracking across {districts.length} districts in {selectedState}.
+          </p>
+        </div>
+        <div className="district-workspace-actions">
+          {selectedDistrict && (
+            <button
+              type="button"
+              className="district-clear-filter-btn"
+              onClick={() => onSelectDistrict('')}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              <span>Clear District ({selectedDistrict})</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="button secondary"
+            onClick={onExportCSV}
+            disabled={isExporting}
+            title={`Export project audit register for ${selectedDistrict ? `${selectedDistrict} District` : selectedState}`}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            {isExporting ? 'Exporting...' : selectedDistrict ? `Export ${selectedDistrict} CSV` : `Export ${selectedState} CSV`}
+          </button>
+        </div>
+      </div>
+
+      {/* State-Level Key Metrics Ribbon */}
+      <section className="kpi-grid">
+        <Stat
+          label="State Average Risk"
+          value={`${stateAvgRisk.toFixed(1)}%`}
+          detail={
+            stateAvgRisk > nationalAvgRisk
+              ? `+${(stateAvgRisk - nationalAvgRisk).toFixed(1)}% above national avg (${nationalAvgRisk.toFixed(1)}%)`
+              : `${Math.abs(stateAvgRisk - nationalAvgRisk).toFixed(1)}% below national avg (${nationalAvgRisk.toFixed(1)}%)`
+          }
+          tone={stateAvgRisk >= 50 ? 'orange' : 'teal'}
+        />
+        <Stat
+          label="Districts Monitored"
+          value={String(districts.length)}
+          detail={`${totalStateProjects.toLocaleString('en-IN')} monitored works in ${selectedState}`}
+        />
+        <Stat
+          label="Total Sanctioned"
+          value={compactMoney(totalStateSanctioned)}
+          detail={money(totalStateSanctioned)}
+          tone="gold"
+        />
+        <Stat
+          label="High Risk & Critical"
+          value={String(totalHighRisk)}
+          detail={`${totalCritical} critical anomaly cases`}
+          tone={totalCritical > 0 ? 'red' : 'orange'}
+        />
+      </section>
+
+      {/* District Comparative Risk Analysis Chart */}
+      <section className="panel chart-panel">
+        <div className="panel-head">
+          <div>
+            <div className="eyebrow">DISTRICT COMPARATIVE RISK PROFILE</div>
+            <h2>Average Risk Score by District in {selectedState}</h2>
+            <p className="muted">
+              Identifies hotspots exceeding the state average ({stateAvgRisk.toFixed(1)}%) and national baseline ({nationalAvgRisk.toFixed(1)}%).
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {levels.map(lvl => (
+              <span key={lvl} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: palette[lvl] }} />
+                {lvl}
+              </span>
+            ))}
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={chartData} margin={{ left: 0, right: 15, bottom: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis dataKey="district" tick={{ fill: '#334155', fontSize: 11, fontWeight: 600 }} />
+            <YAxis domain={[0, 100]} unit="%" tick={{ fill: '#64748b', fontSize: 11 }} />
+            <Tooltip
+              formatter={(value: any, _name: any, item: any) => [
+                `${value}% (${item.payload.projects} works, ${item.payload.risk_level} risk, ${compactMoney(item.payload.sanctioned)})`,
+                'Risk Score'
+              ]}
+            />
+            <ReferenceLine
+              y={stateAvgRisk}
+              stroke="#0d9488"
+              strokeWidth={2}
+              strokeDasharray="4 4"
+              label={{ value: `State Avg: ${stateAvgRisk.toFixed(1)}%`, fill: '#0d9488', fontSize: 11, position: 'insideTopRight' }}
+            />
+            <ReferenceLine
+              y={nationalAvgRisk}
+              stroke="#64748b"
+              strokeWidth={1.5}
+              strokeDasharray="3 3"
+              label={{ value: `National Avg: ${nationalAvgRisk.toFixed(1)}%`, fill: '#64748b', fontSize: 11, position: 'insideBottomRight' }}
+            />
+            <Bar dataKey="risk" radius={[4, 4, 0, 0]}>
+              {chartData.map(entry => (
+                <Cell key={`cell-${entry.district}`} fill={palette[entry.risk_level] || '#0d9488'} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </section>
+
+      {/* District Risk Cards Grid */}
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <div className="eyebrow">DISTRICT RISK MATRIX</div>
+            <h2>District Intelligence Cards</h2>
+            <p className="muted">Click any district card to focus the register below on that district.</p>
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Sort by:</span>
+            <button
+              type="button"
+              className={`button ghost ${sortBy === 'risk' ? 'active' : ''}`}
+              style={{ padding: '3px 8px', fontSize: 11 }}
+              onClick={() => setSortBy('risk')}
+            >
+              Risk Score
+            </button>
+            <button
+              type="button"
+              className={`button ghost ${sortBy === 'projects' ? 'active' : ''}`}
+              style={{ padding: '3px 8px', fontSize: 11 }}
+              onClick={() => setSortBy('projects')}
+            >
+              Projects Count
+            </button>
+            <button
+              type="button"
+              className={`button ghost ${sortBy === 'sanctioned' ? 'active' : ''}`}
+              style={{ padding: '3px 8px', fontSize: 11 }}
+              onClick={() => setSortBy('sanctioned')}
+            >
+              Sanctioned Value
+            </button>
+          </div>
+        </div>
+
+        <div className="district-cards-grid">
+          {sortedDistricts.map(d => {
+            const isDistSelected = selectedDistrict === d.district;
+            const distDiff = Number(((d.average_risk || 0) - stateAvgRisk).toFixed(1));
+            const isUp = distDiff > 0.1;
+            const isDown = distDiff < -0.1;
+
+            return (
+              <div
+                key={d.district}
+                className={`district-risk-card ${isDistSelected ? 'selected' : ''}`}
+                onClick={() => onSelectDistrict(isDistSelected ? '' : d.district)}
+              >
+                <div className="district-card-top">
+                  <h3 className="district-card-name">
+                    <span>{d.district}</span>
+                    {isDistSelected && (
+                      <span style={{ fontSize: 10, color: 'var(--teal)', background: '#ecfdf5', padding: '1px 6px', borderRadius: 4 }}>
+                        Focused
+                      </span>
+                    )}
+                  </h3>
+                  <RiskBadge level={d.risk_level || 'LOW'} />
+                </div>
+
+                <div className="district-card-score-row">
+                  <div>
+                    <span className="district-score-big" style={{ color: palette[d.risk_level] || 'var(--teal)' }}>
+                      {(d.average_risk || 0).toFixed(1)}%
+                    </span>
+                    <span className="district-score-meta"> Avg Risk</span>
+                  </div>
+                  <span
+                    className={`state-map-trend-indicator ${isUp ? 'trend-up' : isDown ? 'trend-down' : 'trend-neutral'}`}
+                    title={`State average: ${stateAvgRisk.toFixed(1)}%`}
+                  >
+                    {isUp ? `+${distDiff}% vs state` : isDown ? `${distDiff}% vs state` : 'Equal'}
+                  </span>
+                </div>
+
+                {/* Score Progress Meter */}
+                <div className="district-meter-bar">
+                  <div
+                    className="district-meter-fill"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, d.average_risk || 0))}%`,
+                      background: palette[d.risk_level] || 'var(--teal)',
+                    }}
+                  />
+                </div>
+
+                {/* Metrics Breakdown Grid */}
+                <div className="district-card-metrics">
+                  <div className="district-card-metric-item">
+                    <span className="district-card-metric-label">Works</span>
+                    <strong className="district-card-metric-value">{d.projects || 0}</strong>
+                  </div>
+                  <div className="district-card-metric-item">
+                    <span className="district-card-metric-label">Utilization</span>
+                    <strong className="district-card-metric-value">{pct(d.utilization_ratio || 0)}</strong>
+                  </div>
+                  <div className="district-card-metric-item">
+                    <span className="district-card-metric-label">Sanctioned</span>
+                    <strong className="district-card-metric-value">{compactMoney(d.sanctioned || 0)}</strong>
+                  </div>
+                  <div className="district-card-metric-item">
+                    <span className="district-card-metric-label">Delays</span>
+                    <strong className="district-card-metric-value" style={{ color: d.delays_count > 0 ? '#d95b67' : '#1e293b' }}>
+                      {d.delays_count || 0}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Top Sectors Chips */}
+                {d.top_sectors && d.top_sectors.length > 0 && (
+                  <div className="district-card-sectors">
+                    <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>Top:</span>
+                    {d.top_sectors.slice(0, 2).map((s: any) => (
+                      <span key={s.sector} className="district-sector-chip">
+                        {s.sector} ({s.count})
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Footer Action */}
+                <div className="district-card-footer">
+                  <span style={{ color: 'var(--muted)', fontSize: 11 }}>
+                    {d.anomalies_count > 0 ? `${d.anomalies_count} anomaly signals` : 'Standard pattern'}
+                  </span>
+                  <button
+                    type="button"
+                    className={`district-card-btn ${isDistSelected ? 'selected' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectDistrict(isDistSelected ? '' : d.district);
+                    }}
+                  >
+                    {isDistSelected ? '✓ Focused' : 'Inspect District →'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Comprehensive District Risk Breakdown Table */}
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <div className="eyebrow">DISTRICT AUDIT REGISTER</div>
+            <h2>All {selectedState} Districts Risk Ledger</h2>
+            <p className="muted">Tabular comparison of risk scores, financial utilization, and operational delays by district.</p>
+          </div>
+        </div>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>District</th>
+                <th>Risk Level</th>
+                <th>Avg Risk Score</th>
+                <th>Projects Monitored</th>
+                <th>Sanctioned (INR)</th>
+                <th>Expenditure (INR)</th>
+                <th>Utilization</th>
+                <th>Delays</th>
+                <th>Outliers</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedDistricts.map(d => {
+                const isDistSelected = selectedDistrict === d.district;
+                return (
+                  <tr
+                    key={d.district}
+                    style={{ background: isDistSelected ? '#f0fdf9' : undefined, cursor: 'pointer' }}
+                    onClick={() => onSelectDistrict(isDistSelected ? '' : d.district)}
+                  >
+                    <td>
+                      <strong>{d.district}</strong>
+                      {isDistSelected && <small style={{ color: 'var(--teal)' }}>Active Filter</small>}
+                    </td>
+                    <td><RiskBadge level={d.risk_level || 'LOW'} /></td>
+                    <td className="tabular-nums">
+                      <strong style={{ color: palette[d.risk_level] || 'var(--teal)' }}>
+                        {(d.average_risk || 0).toFixed(1)}%
+                      </strong>
+                    </td>
+                    <td className="tabular-nums">{d.projects || 0}</td>
+                    <td className="tabular-nums">{money(d.sanctioned || 0)}</td>
+                    <td className="tabular-nums">{money(d.expenditure || 0)}</td>
+                    <td className="tabular-nums"><strong>{pct(d.utilization_ratio || 0)}</strong></td>
+                    <td className="tabular-nums">
+                      {d.delays_count > 0 ? (
+                        <span style={{ color: '#d95b67', fontWeight: 600 }}>{d.delays_count} delayed</span>
+                      ) : (
+                        <span style={{ color: '#48a88a' }}>On track</span>
+                      )}
+                    </td>
+                    <td className="tabular-nums">
+                      {d.anomalies_count > 0 ? (
+                        <span className="signal-chip">{d.anomalies_count} signals</span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="button secondary"
+                        style={{ padding: '3px 8px', fontSize: 11 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectDistrict(isDistSelected ? '' : d.district);
+                        }}
+                      >
+                        {isDistSelected ? 'Clear' : 'Focus'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function DashboardPage() {
   const location = useLocation();
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null); const [compliance, setCompliance] = useState<any>(null); const [coverage, setCoverage] = useState<any>(null); const [fraudSummary, setFraudSummary] = useState<any>(null); const [reviewError, setReviewError] = useState(''); const { filters, change } = useDashboardFilters(); const [selectedState, setSelectedState] = useState('');
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [compliance, setCompliance] = useState<any>(null);
+  const [coverage, setCoverage] = useState<any>(null);
+  const [fraudSummary, setFraudSummary] = useState<any>(null);
+  const [reviewError, setReviewError] = useState('');
+  const { filters, change } = useDashboardFilters();
+  const [selectedState, setSelectedState] = useState('');
+  const [hoveredState, setHoveredState] = useState<string | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [districtProjects, setDistrictProjects] = useState<Project[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const selectedRunId = new URLSearchParams(location.search).get('run_id');
 
@@ -687,6 +1773,9 @@ function DashboardPage() {
       if (currentState) {
         params.state = currentState;
       }
+      if (selectedDistrict) {
+        params.district = selectedDistrict;
+      }
       if (selectedRunId) {
         params.run_id = selectedRunId;
       }
@@ -698,90 +1787,530 @@ function DashboardPage() {
       }
       const response = await axios.get(`${API_BASE}/api/projects`, { params });
       const records = response.data?.records || response.data?.items || [];
-      const filename = currentState
+      const filename = selectedDistrict
+        ? `${selectedDistrict.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_district_projects_audit.csv`
+        : currentState
         ? `${currentState.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_projects_audit.csv`
         : 'all_states_projects_audit.csv';
       exportProjectsCSV(records, filename);
     } catch (err) {
-      console.error('Failed to export state projects CSV', err);
+      console.error('Failed to export projects CSV', err);
     } finally {
       setIsExporting(false);
     }
   };
 
-  useEffect(() => { axios.get(`${API_BASE}/api/dashboard`, { params: { run_id: selectedRunId || undefined, state: selectedState || filters.state || undefined, category: filters.category || undefined, risk_level: filters.risk_level || undefined } }).then(response => { setDashboard(response.data); change('stateOptions', (response.data.state_options || []).join('|')); }); }, [selectedRunId, selectedState, filters.state, filters.category, filters.risk_level]);
-  useEffect(() => { const params = { run_id: selectedRunId || undefined }; setReviewError(''); Promise.all([axios.get(`${API_BASE}/api/compliance/summary`, { params }), axios.get(`${API_BASE}/api/integration/coverage`, { params }), axios.get(`${API_BASE}/api/fraud-risk/summary`, { params })]).then(([findings, sourceCoverage, fraud]) => { setCompliance(findings.data); setCoverage(sourceCoverage.data); setFraudSummary(fraud.data); }).catch(() => setReviewError('Compliance, fraud-risk, and source coverage could not be loaded for this analysis run.')); }, [selectedRunId]);
+  useEffect(() => {
+    axios.get(`${API_BASE}/api/dashboard`, {
+      params: {
+        run_id: selectedRunId || undefined,
+        state: selectedState || filters.state || undefined,
+        category: filters.category || undefined,
+        risk_level: filters.risk_level || undefined,
+      }
+    }).then(response => {
+      setDashboard(response.data);
+      change('stateOptions', (response.data.state_options || []).join('|'));
+    });
+  }, [selectedRunId, selectedState, filters.state, filters.category, filters.risk_level]);
+
+  // Fetch projects for district if selected
+  useEffect(() => {
+    if (selectedState && selectedDistrict) {
+      axios.get(`${API_BASE}/api/projects`, {
+        params: {
+          state: selectedState,
+          district: selectedDistrict,
+          page_size: 50,
+        }
+      }).then(res => {
+        setDistrictProjects(res.data?.records || res.data?.items || []);
+      }).catch(() => {
+        setDistrictProjects([]);
+      });
+    } else {
+      setDistrictProjects([]);
+    }
+  }, [selectedState, selectedDistrict]);
+
+  useEffect(() => {
+    const params = { run_id: selectedRunId || undefined };
+    setReviewError('');
+    Promise.all([
+      axios.get(`${API_BASE}/api/compliance/summary`, { params }),
+      axios.get(`${API_BASE}/api/integration/coverage`, { params }),
+      axios.get(`${API_BASE}/api/fraud-risk/summary`, { params })
+    ]).then(([findings, sourceCoverage, fraud]) => {
+      setCompliance(findings.data);
+      setCoverage(sourceCoverage.data);
+      setFraudSummary(fraud.data);
+    }).catch(() => setReviewError('Compliance, fraud-risk, and source coverage could not be loaded for this analysis run.'));
+  }, [selectedRunId]);
+
   if (!dashboard) return <div className="page-loading">Loading intelligence workspace...</div>;
-    const riskData = levels.map(level => ({ name: level, value: dashboard.risk_distribution?.[level] || 0 }));
+  const riskData = levels.map(level => ({ name: level, value: dashboard.risk_distribution?.[level] || 0 }));
   const stateData = (dashboard.state_wise || []).slice(0, 8).map(row => ({ name: row.name.replace(' Pradesh', ''), risk: Number(row.average_risk.toFixed(1)), projects: row.projects }));
-  return <div className="page-stack"><div className="page-heading"><div><div className="eyebrow">NATIONAL PROJECT REVIEW</div><h1>Public project review</h1><p>Clear, evidence-based information to help officers decide what needs a closer look.</p></div><div className="heading-meta"><span className="live-dot" />DATA UPDATED<small>{dateText(dashboard.last_analysis)}</small></div></div>
-    {dashboard.total_projects === 0 && <div className="notice demo-notice"><strong>No project data yet</strong><span>Upload one or more project files to begin. The overview will update from your files.</span></div>}
-    <FilterBar values={filters} onChange={change} />
-    <section className="kpi-grid"><Stat label="Projects analyzed" value={dashboard.total_projects.toLocaleString('en-IN')} detail="Across monitored records" /><Stat label="Sanctioned value" value={compactMoney(dashboard.total_sanction_amount)} detail={money(dashboard.total_sanction_amount)} tone="gold" /><Stat label="Expenditure" value={compactMoney(dashboard.total_expenditure)} detail={`${pct(dashboard.total_utilization_ratio)} overall utilization`} tone="blue" /><Stat label="High risk" value={String(dashboard.high_risk_projects)} detail={`${dashboard.critical_projects} critical cases`} tone="orange" /><Stat label="Open alerts" value={String(dashboard.active_alerts)} detail="Signals requiring review" tone="red" /></section>
-    {reviewError ? <section className="notice">{reviewError}</section> : compliance && (
-      <section className="panel compliance-panel">
+
+  // Get active or hovered state districts
+  const activeViewedState = selectedState || hoveredState || '';
+  const activeStateDistricts = activeViewedState
+    ? (dashboard.district_wise || []).filter((d: any) => d.state && d.state.toLowerCase() === activeViewedState.toLowerCase())
+    : [];
+
+  const activeDistrictRow = selectedDistrict
+    ? activeStateDistricts.find((d: any) => d.district.toLowerCase() === selectedDistrict.toLowerCase())
+    : null;
+
+  const displayProjects = selectedDistrict && districtProjects.length > 0
+    ? districtProjects
+    : selectedDistrict
+    ? (dashboard.top_projects || []).filter(p => p.district && p.district.toLowerCase() === selectedDistrict.toLowerCase())
+    : dashboard.top_projects || [];
+
+  return (
+    <div className="page-stack">
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">NATIONAL PROJECT REVIEW</div>
+          <h1>Public project review</h1>
+          <p>Clear, evidence-based information to help officers decide what needs a closer look.</p>
+        </div>
+        <div className="heading-meta">
+          <span className="live-dot" />DATA UPDATED
+          <small>{dateText(dashboard.last_analysis)}</small>
+        </div>
+      </div>
+
+      {dashboard.total_projects === 0 && (
+        <div className="notice demo-notice">
+          <strong>No project data yet</strong>
+          <span>Upload one or more project files to begin. The overview will update from your files.</span>
+        </div>
+      )}
+
+      <FilterBar values={filters} onChange={change} />
+
+      <section className="kpi-grid">
+        <Stat label="Projects analyzed" value={dashboard.total_projects.toLocaleString('en-IN')} detail="Across monitored records" />
+        <Stat label="Sanctioned value" value={compactMoney(dashboard.total_sanction_amount)} detail={money(dashboard.total_sanction_amount)} tone="gold" />
+        <Stat label="Expenditure" value={compactMoney(dashboard.total_expenditure)} detail={`${pct(dashboard.total_utilization_ratio)} overall utilization`} tone="blue" />
+        <Stat label="High risk" value={String(dashboard.high_risk_projects)} detail={`${dashboard.critical_projects} critical cases`} tone="orange" />
+        <Stat label="Open alerts" value={String(dashboard.active_alerts)} detail="Signals requiring review" tone="red" />
+      </section>
+
+      {reviewError ? <section className="notice">{reviewError}</section> : compliance && (
+        <section className="panel compliance-panel">
+          <div className="panel-head">
+            <div>
+              <div className="eyebrow">COMPLIANCE & FRAUD RISK TRIAGE</div>
+              <h2>{compliance.total_findings} findings flagged for administrative verification</h2>
+              <p className="muted">Statistical divergences and deterministic checks serve as verification prompts for authorized officers, not automatic confirmation of irregularities.</p>
+            </div>
+            <Link to="/alerts" className="button secondary">View all alerts</Link>
+          </div>
+          <div className="risk-summary">
+            {Object.entries(compliance.by_severity || {}).map(([level, count]) => (
+              <div key={level}>
+                <RiskBadge level={level} />
+                <span>{level} findings</span>
+                <strong>{String(count)}</strong>
+              </div>
+            ))}
+          </div>
+          {fraudSummary && (
+            <div className="fraud-summary-section" style={{ marginTop: 18 }}>
+              <h3 style={{ fontSize: 13, color: 'var(--deep)', marginBottom: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fraud-Risk Pattern Indicators</h3>
+              <div className="fraud-chips-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
+                  <span className="stat-label">Projects with signals</span>
+                  <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.projects_with_signals}</strong>
+                </div>
+                <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
+                  <span className="stat-label">Project splitting</span>
+                  <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.project_splitting_count}</strong>
+                </div>
+                <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
+                  <span className="stat-label">Payment timing</span>
+                  <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.payment_timing_anomaly_count}</strong>
+                </div>
+                <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
+                  <span className="stat-label">Duplicate payments</span>
+                  <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.duplicate_payment_count}</strong>
+                </div>
+                <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
+                  <span className="stat-label">Repeated works</span>
+                  <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.repeated_work_count}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+          <div style={{ marginTop: 18 }}>
+            <h3 style={{ fontSize: 13, color: 'var(--deep)', marginBottom: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Top Review Guidance</h3>
+            <ul className="plain-list">
+              {(compliance.items || []).slice(0, 5).map((item: any, index: number) => (
+                <li key={`${item.rule_code}-${index}`}>
+                  <strong>{item.title}</strong> — {item.recommended_action}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {coverage && <p className="muted" style={{ marginTop: 12, fontSize: 11 }}>Source coverage: {Object.entries(coverage.coverage_percentages || {}).map(([role, value]) => `${role}: ${value}%`).join(' · ') || 'Not available'}. Ambiguous records: {(coverage.ambiguous_matches || []).length}; unmatched rows: {(coverage.unmatched_rows || []).length}.</p>}
+        </section>
+      )}
+
+      {/* Map & State/District Summary Grid */}
+      <div className="grid-2-1">
+        <section className="panel map-panel">
+          <div className="panel-head">
+            <div>
+              <div className="eyebrow">{selectedState ? 'STATE DRILL-DOWN' : 'NATIONAL OVERVIEW'}</div>
+              <h2>{selectedState ? `${selectedState} Districts Risk View` : 'Where do projects need attention?'}</h2>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="button secondary"
+                onClick={handleDownloadStateCSV}
+                disabled={isExporting}
+                title={selectedDistrict ? `Download CSV for ${selectedDistrict}` : selectedState ? `Download CSV for ${selectedState}` : 'Download CSV for all states'}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                {isExporting ? 'Exporting...' : selectedDistrict ? `Download CSV (${selectedDistrict})` : selectedState ? `Download CSV (${selectedState})` : 'Download CSV'}
+              </button>
+              {selectedState && (
+                <button
+                  className="button ghost"
+                  onClick={() => {
+                    setSelectedState('');
+                    setSelectedDistrict('');
+                    change('state', '');
+                  }}
+                >
+                  All states
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="map-layout">
+            <StateMap
+              dashboard={dashboard}
+              selected={selectedState}
+              selectedDistrict={selectedDistrict}
+              onSelect={state => {
+                setSelectedState(state);
+                setSelectedDistrict('');
+                change('state', state);
+              }}
+              onSelectDistrict={dist => setSelectedDistrict(dist)}
+              onHoverState={setHoveredState}
+            />
+
+            <div className="state-insight">
+              {activeViewedState ? (
+                <>
+                  <div className="eyebrow">
+                    {selectedDistrict ? 'FOCUSED DISTRICT' : selectedState ? 'SELECTED STATE' : 'STATE HOVER PREVIEW'}
+                  </div>
+                  <h3>{selectedDistrict ? `${selectedDistrict} (${selectedState})` : activeViewedState}</h3>
+
+                  {selectedDistrict && activeDistrictRow ? (
+                    <>
+                      <div className="insight-number">
+                        {activeDistrictRow.average_risk.toFixed(1)}
+                        <small>district avg risk</small>
+                      </div>
+                      <div className="insight-list">
+                        <div>
+                          <span>Risk Level</span>
+                          <strong><RiskBadge level={activeDistrictRow.risk_level || 'LOW'} /></strong>
+                        </div>
+                        <div>
+                          <span>Projects</span>
+                          <strong>{activeDistrictRow.projects}</strong>
+                        </div>
+                        <div>
+                          <span>Sanctioned</span>
+                          <strong>{compactMoney(activeDistrictRow.sanctioned)}</strong>
+                        </div>
+                        <div>
+                          <span>Spent</span>
+                          <strong>{pct(activeDistrictRow.utilization_ratio)}</strong>
+                        </div>
+                        <div>
+                          <span>Delayed</span>
+                          <strong>{activeDistrictRow.delays_count}</strong>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <button
+                          className="button secondary"
+                          style={{ width: '100%', justifyContent: 'center' }}
+                          onClick={() => setSelectedDistrict('')}
+                        >
+                          Clear District Focus
+                        </button>
+                        <button
+                          className="button ghost"
+                          style={{ width: '100%', justifyContent: 'center' }}
+                          onClick={handleDownloadStateCSV}
+                          disabled={isExporting}
+                        >
+                          Export {selectedDistrict} CSV
+                        </button>
+                      </div>
+                    </>
+                  ) : (() => {
+                    const row = dashboard.state_wise.find(item => item.name === activeViewedState);
+                    const isPreview = !selectedState && activeViewedState === hoveredState;
+                    return row ? (
+                      <>
+                        <div className="insight-number">
+                          {row.average_risk.toFixed(1)}
+                          <small>avg state risk</small>
+                        </div>
+                        <div className="insight-list">
+                          <div>
+                            <span>Districts</span>
+                            <strong>{activeStateDistricts.length || 'Recorded'}</strong>
+                          </div>
+                          <div>
+                            <span>Projects</span>
+                            <strong>{row.projects}</strong>
+                          </div>
+                          <div>
+                            <span>Sanctioned</span>
+                            <strong>{compactMoney(row.sanctioned)}</strong>
+                          </div>
+                          <div>
+                            <span>High risk</span>
+                            <strong>{row.high_risk}</strong>
+                          </div>
+                          <div>
+                            <span>Critical</span>
+                            <strong>{row.critical}</strong>
+                          </div>
+                        </div>
+                        <div style={{ marginTop: 14 }}>
+                          <button
+                            className="button secondary"
+                            style={{ width: '100%', justifyContent: 'center' }}
+                            onClick={() => {
+                              if (isPreview) {
+                                setSelectedState(activeViewedState);
+                                change('state', activeViewedState);
+                              } else {
+                                handleDownloadStateCSV();
+                              }
+                            }}
+                          >
+                            {isPreview ? (
+                              `Zoom & Inspect ${activeViewedState} Districts →`
+                            ) : (
+                              <>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                  <polyline points="7 10 12 15 17 10" />
+                                  <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                {isExporting ? 'Preparing export...' : `Export ${selectedState} CSV`}
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <EmptyState title="No records" text="This state has no analyzed records." />
+                    );
+                  })()}
+                </>
+              ) : (
+                <>
+                  <div className="eyebrow">NATIONAL SUMMARY</div>
+                  <h3>All India</h3>
+                  <div className="insight-number">
+                    {dashboard.total_utilization_ratio ? pct(dashboard.total_utilization_ratio) : '—'}
+                    <small>national utilization</small>
+                  </div>
+                  <div className="insight-list">
+                    <div>
+                      <span>States covered</span>
+                      <strong>{dashboard.state_wise.length}</strong>
+                    </div>
+                    <div>
+                      <span>High risk</span>
+                      <strong>{dashboard.high_risk_projects}</strong>
+                    </div>
+                    <div>
+                      <span>Alerts</span>
+                      <strong>{dashboard.active_alerts}</strong>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 14 }}>
+                    <button
+                      className="button secondary"
+                      style={{ width: '100%', justifyContent: 'center' }}
+                      onClick={handleDownloadStateCSV}
+                      disabled={isExporting}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      {isExporting ? 'Preparing export...' : 'Export National CSV'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Risk profile donut */}
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <div className="eyebrow">RISK PROFILE</div>
+              <h2>{selectedState ? `${selectedState} Review Levels` : 'Projects by review level'}</h2>
+            </div>
+            <Link to="/alerts" className="text-link">Open reminders →</Link>
+          </div>
+          <div className="donut-wrap">
+            <ResponsiveContainer width="60%" height={220}>
+              <PieChart>
+                <Pie data={riskData} dataKey="value" innerRadius={62} outerRadius={88} paddingAngle={3}>
+                  {riskData.map(item => (
+                    <Cell key={item.name} fill={palette[item.name]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: any, name: any) => [`${value} projects`, name]} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="risk-list">
+              {riskData.map(item => (
+                <div key={item.name}>
+                  <span className="risk-key" style={{ background: palette[item.name] }} />
+                  {item.name}
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* When a state is selected: SHOW DISTRICT-LEVEL RISK STATISTICS WORKSPACE */}
+      {selectedState ? (
+        <DistrictRiskWorkspace
+          selectedState={selectedState}
+          selectedDistrict={selectedDistrict}
+          onSelectDistrict={dist => setSelectedDistrict(dist)}
+          districts={activeStateDistricts}
+          stateRow={dashboard.state_wise.find(s => s.name === selectedState)}
+          nationalAvgRisk={
+            typeof (dashboard as any).national_average_risk === 'number'
+              ? (dashboard as any).national_average_risk
+              : 0
+          }
+          onExportCSV={handleDownloadStateCSV}
+          isExporting={isExporting}
+        />
+      ) : (
+        /* When no state is selected: SHOW NATIONAL COMPARISON GRIDS */
+        <div className="grid-2">
+          <section className="panel chart-panel">
+            <div className="panel-head">
+              <div>
+                <div className="eyebrow">STATE COMPARISON</div>
+                <h2>Average risk by state</h2>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={stateData} margin={{ left: 0, right: 10, bottom: 25 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#dbe5e1" vertical={false} />
+                <XAxis dataKey="name" angle={-25} textAnchor="end" height={55} tick={{ fill: '#65736e', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#65736e', fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="risk" fill="#238f82" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </section>
+
+          <section className="panel chart-panel">
+            <div className="panel-head">
+              <div>
+                <div className="eyebrow">OPERATIONAL SIGNAL</div>
+                <h2>Delayed completion profile</h2>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={dashboard.delay_distribution}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#dbe5e1" vertical={false} />
+                <XAxis dataKey="range" tick={{ fill: '#65736e', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#65736e', fontSize: 11 }} />
+                <Tooltip />
+                <Line type="monotone" dataKey="projects" stroke="#d57c4c" strokeWidth={3} dot={{ fill: '#d57c4c', r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </section>
+        </div>
+      )}
+
+      {/* Projects Register / Projects to Check */}
+      <section className="panel attention-panel">
         <div className="panel-head">
           <div>
-            <div className="eyebrow">COMPLIANCE & FRAUD RISK TRIAGE</div>
-            <h2>{compliance.total_findings} findings flagged for administrative verification</h2>
-            <p className="muted">Statistical divergences and deterministic checks serve as verification prompts for authorized officers, not automatic confirmation of irregularities.</p>
+            <div className="eyebrow">
+              {selectedDistrict
+                ? `${selectedDistrict.toUpperCase()} DISTRICT REGISTER`
+                : selectedState
+                ? `${selectedState.toUpperCase()} PROJECT REGISTER`
+                : 'PROJECTS TO CHECK'}
+            </div>
+            <h2>
+              {selectedDistrict
+                ? `Works in ${selectedDistrict} District (${displayProjects.length})`
+                : selectedState
+                ? `Works in ${selectedState} (${displayProjects.length})`
+                : 'Priority attention required'}
+            </h2>
+            <p>
+              {selectedDistrict
+                ? `Detailed listing of projects located in ${selectedDistrict}, ${selectedState}.`
+                : selectedState
+                ? `All projects analyzed in ${selectedState}. Drill down further by clicking any district above.`
+                : 'Projects with the strongest reasons for a closer review.'}
+            </p>
           </div>
-          <Link to="/alerts" className="button secondary">View all alerts</Link>
+          <Link to="/risk" className="button secondary">View all projects to check</Link>
         </div>
-        <div className="risk-summary">
-          {Object.entries(compliance.by_severity || {}).map(([level, count]) => (
-            <div key={level}>
-              <RiskBadge level={level} />
-              <span>{level} findings</span>
-              <strong>{String(count)}</strong>
+
+        {selectedDistrict && (
+          <div className="district-active-filter-banner">
+            <div className="district-active-filter-text">
+              <span style={{ fontSize: 18 }}>📍</span>
+              <span>
+                Filtered by District: <strong>{selectedDistrict}</strong> ({displayProjects.length} analyzed works)
+              </span>
             </div>
-          ))}
-        </div>
-        {fraudSummary && (
-          <div className="fraud-summary-section" style={{ marginTop: 18 }}>
-            <h3 style={{ fontSize: 13, color: 'var(--deep)', marginBottom: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fraud-Risk Pattern Indicators</h3>
-            <div className="fraud-chips-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-              <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
-                <span className="stat-label">Projects with signals</span>
-                <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.projects_with_signals}</strong>
-              </div>
-              <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
-                <span className="stat-label">Project splitting</span>
-                <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.project_splitting_count}</strong>
-              </div>
-              <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
-                <span className="stat-label">Payment timing</span>
-                <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.payment_timing_anomaly_count}</strong>
-              </div>
-              <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
-                <span className="stat-label">Duplicate payments</span>
-                <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.duplicate_payment_count}</strong>
-              </div>
-              <div className="stat-block" style={{ padding: '12px 14px', background: '#fafcfb', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)' }}>
-                <span className="stat-label">Repeated works</span>
-                <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.repeated_work_count}</strong>
-              </div>
-            </div>
+            <button
+              type="button"
+              className="district-clear-filter-btn"
+              onClick={() => setSelectedDistrict('')}
+            >
+              Show all {selectedState} projects
+            </button>
           </div>
         )}
-        <div style={{ marginTop: 18 }}>
-          <h3 style={{ fontSize: 13, color: 'var(--deep)', marginBottom: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Top Review Guidance</h3>
-          <ul className="plain-list">
-            {(compliance.items || []).slice(0, 5).map((item: any, index: number) => (
-              <li key={`${item.rule_code}-${index}`}>
-                <strong>{item.title}</strong> — {item.recommended_action}
-              </li>
-            ))}
-          </ul>
-        </div>
-        {coverage && <p className="muted" style={{ marginTop: 12, fontSize: 11 }}>Source coverage: {Object.entries(coverage.coverage_percentages || {}).map(([role, value]) => `${role}: ${value}%`).join(' · ') || 'Not available'}. Ambiguous records: {(coverage.ambiguous_matches || []).length}; unmatched rows: {(coverage.unmatched_rows || []).length}.</p>}
+
+        <ProjectTable projects={displayProjects} compact />
       </section>
-    )}
-    <div className="grid-2-1"><section className="panel map-panel"><div className="panel-head"><div><div className="eyebrow">STATE VIEW</div><h2>Where do projects need attention?</h2></div><div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}><button className="button secondary" onClick={handleDownloadStateCSV} disabled={isExporting} title={selectedState ? `Download CSV project register for ${selectedState}` : 'Download CSV project register for all states'}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>{isExporting ? 'Exporting...' : selectedState ? `Download CSV (${selectedState})` : 'Download CSV'}</button><button className="button ghost" onClick={() => { setSelectedState(''); change('state', ''); }}>All states</button></div></div><div className="map-layout"><StateMap dashboard={dashboard} selected={selectedState} onSelect={state => { setSelectedState(state); change('state', state); }} /><div className="state-insight"><div className="eyebrow">SELECTED STATE</div><h3>{selectedState || 'All India'}</h3>{selectedState ? <>{(() => { const row = dashboard.state_wise.find(item => item.name === selectedState); return row ? <><div className="insight-number">{row.average_risk.toFixed(1)}<small> avg risk</small></div><div className="insight-list"><div><span>Projects</span><strong>{row.projects}</strong></div><div><span>Sanctioned</span><strong>{compactMoney(row.sanctioned)}</strong></div><div><span>High risk</span><strong>{row.high_risk}</strong></div><div><span>Critical</span><strong>{row.critical}</strong></div></div><div style={{ marginTop: 14 }}><button className="button secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleDownloadStateCSV} disabled={isExporting}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>{isExporting ? 'Preparing export...' : `Export ${selectedState} CSV`}</button></div></> : <EmptyState title="No records" text="This state has no analyzed records." />; })()}</> : <><div className="insight-number">{dashboard.total_utilization_ratio ? pct(dashboard.total_utilization_ratio) : '—'}<small> national utilization</small></div><div className="insight-list"><div><span>States covered</span><strong>{dashboard.state_wise.length}</strong></div><div><span>High risk</span><strong>{dashboard.high_risk_projects}</strong></div><div><span>Alerts</span><strong>{dashboard.active_alerts}</strong></div></div><div style={{ marginTop: 14 }}><button className="button secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleDownloadStateCSV} disabled={isExporting}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>{isExporting ? 'Preparing export...' : 'Export National CSV'}</button></div></>}</div></div></section>
-      <section className="panel"><div className="panel-head"><div><div className="eyebrow">RISK PROFILE</div><h2>Projects by review level</h2></div><Link to="/alerts" className="text-link">Open reminders →</Link></div><div className="donut-wrap"><ResponsiveContainer width="60%" height={220}><PieChart><Pie data={riskData} dataKey="value" innerRadius={62} outerRadius={88} paddingAngle={3}>{riskData.map(item => <Cell key={item.name} fill={palette[item.name]} />)}</Pie><Tooltip formatter={(value: any, name: any) => [`${value} projects`, name]} /></PieChart></ResponsiveContainer><div className="risk-list">{riskData.map(item => <div key={item.name}><span className="risk-key" style={{ background: palette[item.name] }} />{item.name}<strong>{item.value}</strong></div>)}</div></div></section></div>
-    <div className="grid-2"><section className="panel chart-panel"><div className="panel-head"><div><div className="eyebrow">STATE COMPARISON</div><h2>Average risk by state</h2></div></div><ResponsiveContainer width="100%" height={250}><BarChart data={stateData} margin={{ left: 0, right: 10, bottom: 25 }}><CartesianGrid strokeDasharray="3 3" stroke="#dbe5e1" vertical={false} /><XAxis dataKey="name" angle={-25} textAnchor="end" height={55} tick={{ fill: '#65736e', fontSize: 11 }} /><YAxis tick={{ fill: '#65736e', fontSize: 11 }} /><Tooltip /><Bar dataKey="risk" fill="#238f82" radius={[3, 3, 0, 0]} /></BarChart></ResponsiveContainer></section><section className="panel chart-panel"><div className="panel-head"><div><div className="eyebrow">OPERATIONAL SIGNAL</div><h2>Delayed completion profile</h2></div></div><ResponsiveContainer width="100%" height={250}><LineChart data={dashboard.delay_distribution}><CartesianGrid strokeDasharray="3 3" stroke="#dbe5e1" vertical={false} /><XAxis dataKey="range" tick={{ fill: '#65736e', fontSize: 11 }} /><YAxis tick={{ fill: '#65736e', fontSize: 11 }} /><Tooltip /><Line type="monotone" dataKey="projects" stroke="#d57c4c" strokeWidth={3} dot={{ fill: '#d57c4c', r: 4 }} /></LineChart></ResponsiveContainer></section></div>
-    <section className="panel attention-panel"><div className="panel-head"><div><div className="eyebrow">PROJECTS TO CHECK</div><h2>Priority attention required</h2><p>Projects with the strongest reasons for a closer review.</p></div><Link to="/risk" className="button secondary">View all projects to check</Link></div><ProjectTable projects={dashboard.top_projects} compact /></section>
-  </div>;
+    </div>
+  );
 }
 
 function ProjectTable({ projects, compact = false }: { projects: Project[]; compact?: boolean }) { 
