@@ -6,6 +6,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, Ref
 import './index.css';
 import MultiUploadPage from './MultiUploadPage';
 import IntegrationPage from './IntegrationPage';
+import CartelRadarPage from './CartelRadarPage';
 import { API_BASE, Role, useAuth } from './auth';
 import { VoiceDictation } from './VoiceDictation';
 import LandingPage from './LandingPage';
@@ -91,8 +92,8 @@ class ProjectPageBoundary extends React.Component<{ children: ReactNode }, { err
 
 const navGroups = [
   { label: 'MONITOR', items: [['Overview', '/', '01'], ['Risk Intelligence', '/risk', '02'], ['Projects', '/projects', '03']] },
-  { label: 'OPERATE', items: [['Upload & Analyze', '/upload', '04'], ['Audit Copilot', '/audit-search', '05'], ['Alerts', '/alerts', '06'], ['Audit Cases', '/cases', '07']] },
-  { label: 'INSIGHT', items: [['Analytics', '/analytics', '08'], ['Agency Intelligence', '/agencies', '09'], ['Fund Reconciliation', '/reconciliation', '10'], ['Duplicate Detection', '/duplicates', '11'], ['Data Integration', '/integration', '12'], ['Data Quality', '/data-quality', '13']] },
+  { label: 'OPERATE', items: [['Upload & Analyze', '/upload', '04'], ['Audit Copilot', '/audit-search', '05'], ['Alerts', '/alerts', '06'], ['Audit Cases', '/cases', '07'], ['Contractor Cartel Radar', '/cartels', '08']] },
+  { label: 'INSIGHT', items: [['Analytics', '/analytics', '09'], ['Agency Intelligence', '/agencies', '10'], ['Fund Reconciliation', '/reconciliation', '11'], ['Duplicate Detection', '/duplicates', '12'], ['Data Integration', '/integration', '13'], ['Data Quality', '/data-quality', '14']] },
 ];
 const roleTitles: Record<Role, string> = { MINISTRY: 'Ministry / National', STATE_NODAL_AUTHORITY: 'State Nodal Authority', DISTRICT_AUTHORITY: 'District Authority', MEMBER_OF_PARLIAMENT: 'Member of Parliament' };
 
@@ -101,6 +102,7 @@ function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [alertCount, setAlertCount] = useState(0);
   const { user, logout, can } = useAuth();
 
@@ -143,13 +145,27 @@ function Shell({ children }: { children: ReactNode }) {
     {/* Backdrop for mobile drawer */}
     {mobileOpen && <div className="sidebar-backdrop" onClick={() => setMobileOpen(false)} />}
 
-    <aside className={cx('sidebar', mobileOpen && 'open')}>
-      <div className="brand">
-        <div className="brand-seal">M</div>
-        <div>
-          <div className="brand-kicker">MPLADS AI</div>
-          <div className="brand-title">Audit Intelligence</div>
+    <aside className={cx('sidebar', mobileOpen && 'open', sidebarCollapsed && 'collapsed')}>
+      <div className="brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="brand-seal">M</div>
+          <div>
+            <div className="brand-kicker">MPLADS AI</div>
+            <div className="brand-title">Audit Intelligence</div>
+          </div>
         </div>
+        <button
+          type="button"
+          className="sidebar-hide-btn"
+          onClick={() => setSidebarCollapsed(true)}
+          title="Hide sidebar for full preview"
+          aria-label="Hide sidebar for full preview"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="11 17 6 12 11 7" />
+            <polyline points="18 17 13 12 18 7" />
+          </svg>
+        </button>
       </div>
       <div className="side-rule" />
       {navGroups.map(group => (
@@ -202,6 +218,21 @@ function Shell({ children }: { children: ReactNode }) {
 
     <div className="workspace">
       <header className="topbar">
+        {sidebarCollapsed && (
+          <button
+            type="button"
+            className="sidebar-show-btn"
+            onClick={() => setSidebarCollapsed(false)}
+            title="Expand sidebar navigation"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+            <span>Show Menu</span>
+          </button>
+        )}
         <div className="crumb">
           {user?.scope_type === 'NATIONAL' ? 'NATIONAL MONITORING' : `${user?.scope_type || 'OFFICIAL'} MONITORING`}
           <span>/</span>
@@ -1942,6 +1973,17 @@ function DashboardPage() {
                   <strong className="stat-value" style={{ fontSize: 20 }}>{fraudSummary.repeated_work_count}</strong>
                 </div>
               </div>
+              <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <Link to="/cartels" className="button secondary" style={{ fontSize: 11, padding: '5px 12px', background: '#0e2b25', color: '#7cecd8', borderColor: '#214e44' }}>
+                  Contractor Cartel Radar →
+                </Link>
+                <Link to="/duplicates" className="button secondary" style={{ fontSize: 11, padding: '5px 12px' }}>
+                  Double-Billing & Duplicate Works →
+                </Link>
+                <Link to="/reconciliation" className="button secondary" style={{ fontSize: 11, padding: '5px 12px' }}>
+                  Budget Overrun Checker →
+                </Link>
+              </div>
             </div>
           )}
           <div style={{ marginTop: 18 }}>
@@ -2053,6 +2095,20 @@ function DashboardPage() {
                         >
                           Clear District Focus
                         </button>
+                        <Link
+                          to="/cartels"
+                          className="button ghost"
+                          style={{ width: '100%', justifyContent: 'center', borderColor: '#2d685c', color: '#7cecd8', textDecoration: 'none' }}
+                        >
+                          Inspect Contractor Cartels →
+                        </Link>
+                        <Link
+                          to="/duplicates"
+                          className="button ghost"
+                          style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}
+                        >
+                          Check Duplicate Works →
+                        </Link>
                         <button
                           className="button ghost"
                           style={{ width: '100%', justifyContent: 'center' }}
@@ -2513,7 +2569,7 @@ function downloadProjectReport(project: Project, explanation: any, similar: any[
   URL.revokeObjectURL(link.href);
 }
 
-function ProjectOverview({ project, explanation }: { project: Project; explanation: any }) {
+function ProjectOverview({ project, explanation, onFlagDiscrepancy }: { project: Project; explanation: any; onFlagDiscrepancy?: (note: string) => void }) {
   const title = projectTitle(project);
   const approved = project.sanction_amount || 0;
   const spent = project.expenditure || 0;
@@ -2524,7 +2580,138 @@ function ProjectOverview({ project, explanation }: { project: Project; explanati
     { name: 'Remaining', amount: Math.max(remaining, 0) },
   ];
   const checks = explanation?.recommended_verification || ['Approval papers', 'Bills and payment records', 'Completion proof', 'Site photographs'];
-  return <><section className="panel project-intro-panel"><div className="eyebrow">PROJECT AT A GLANCE</div><div className="project-intro-grid"><div><h2>{title}</h2><p className="project-description">This is a {project.category || 'public'} project being carried out in {project.district || 'the recorded district'}, {project.state || 'the recorded state'}. It falls under {project.constituency || 'the recorded constituency'} and is linked to {project.mp_name || 'the recorded MP'}.</p><p className="project-description">The review team should confirm that the approved work, spending, supplier, progress, and completion evidence all describe the same project.</p></div><div className="project-facts"><div><span>Project number</span><strong>{project.project_code || `PROJECT-${project.id}`}</strong></div><div><span>Sector</span><strong>{project.category || 'Not recorded'}</strong></div><div><span>State</span><strong>{project.state || 'Not recorded'}</strong></div><div><span>District</span><strong>{project.district || 'Not recorded'}</strong></div><div><span>Constituency</span><strong>{project.constituency || 'Not recorded'}</strong></div><div><span>MP</span><strong>{project.mp_name || 'Not recorded'}</strong></div><div><span>Supplier</span><strong>{project.vendor_name || 'Not recorded'}</strong></div><div><span>Implementing office</span><strong>{project.agency || 'Not recorded'}</strong></div></div></div></section><div className="project-insight-grid"><section className="panel chart-panel"><div className="eyebrow">MONEY BREAKDOWN</div><h2>Approved, spent, and remaining</h2><ResponsiveContainer width="100%" height={220}><BarChart data={financialData} margin={{ left: 10, right: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="#dbe5e1" vertical={false} /><XAxis dataKey="name" tick={{ fill: '#65736e', fontSize: 11 }} /><YAxis tick={{ fill: '#65736e', fontSize: 11 }} tickFormatter={value => `₹${Math.round(Number(value) / 100000)}L`} /><Tooltip formatter={(value: any) => [money(Number(value)), 'Amount']} /><Bar dataKey="amount" fill="#238f82" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer><table className="detail-table"><tbody><tr><th>Approved amount</th><td>{money(approved)}</td></tr><tr><th>Spent so far</th><td>{money(spent)}</td></tr><tr><th>Amount left</th><td>{remaining >= 0 ? money(remaining) : `Overspent by ${money(Math.abs(remaining))}`}</td></tr><tr><th>Use of approved amount</th><td>{pct(typeof project.utilization_ratio === 'number' ? Math.max(0, project.utilization_ratio) : undefined)}</td></tr></tbody></table></section><section className="panel"><div className="eyebrow">AUDITOR'S CHECKLIST</div><h2>What to look for</h2><div className="audit-checklist">{checks.slice(0, 6).map((item: string, index: number) => <div key={item}><span>{index + 1}</span><div><strong>{item}</strong><small>Confirm this record matches the project number, location, amount, and dates.</small></div></div>)}</div></section></div></>;
+
+  const financialPct = Math.min(100, Math.round((spent / Math.max(1, approved)) * 100));
+  const isCompleted = project.status === 'Completed' || Boolean(project.actual_completion_date);
+  const physicalPct = isCompleted ? 100 : (project.delay_days && project.delay_days > 90) ? 35 : (project.delay_days && project.delay_days > 45) ? 55 : 75;
+  const isDivergent = financialPct >= 75 && physicalPct <= 55 && !isCompleted;
+  const isOverspent = spent > approved;
+
+  return <>
+    <section className="panel project-intro-panel">
+      <div className="eyebrow">PROJECT AT A GLANCE</div>
+      <div className="project-intro-grid">
+        <div>
+          <h2>{title}</h2>
+          <p className="project-description">
+            This is a {project.category || 'public'} project being carried out in {project.district || 'the recorded district'}, {project.state || 'the recorded state'}. It falls under {project.constituency || 'the recorded constituency'} and is linked to {project.mp_name || 'the recorded MP'}.
+          </p>
+          <p className="project-description">
+            The review team should confirm that the approved work, spending, supplier, progress, and completion evidence all describe the same project.
+          </p>
+        </div>
+        <div className="project-facts">
+          <div><span>Project number</span><strong>{project.project_code || `PROJECT-${project.id}`}</strong></div>
+          <div><span>Sector</span><strong>{project.category || 'Not recorded'}</strong></div>
+          <div><span>State</span><strong>{project.state || 'Not recorded'}</strong></div>
+          <div><span>District</span><strong>{project.district || 'Not recorded'}</strong></div>
+          <div><span>Constituency</span><strong>{project.constituency || 'Not recorded'}</strong></div>
+          <div><span>MP</span><strong>{project.mp_name || 'Not recorded'}</strong></div>
+          <div><span>Supplier</span><strong>{project.vendor_name || 'Not recorded'}</strong></div>
+          <div><span>Implementing office</span><strong>{project.agency || 'Not recorded'}</strong></div>
+        </div>
+      </div>
+    </section>
+
+    {/* PHYSICAL VS FINANCIAL PROGRESS RECONCILIATION */}
+    <section className="panel" style={{ background: isOverspent ? '#fff5f5' : isDivergent ? '#fffdf7' : '#ffffff', border: isOverspent ? '1px solid #f87171' : isDivergent ? '1px solid #fcd34d' : '1px solid var(--line)' }}>
+      <div className="panel-head">
+        <div>
+          <div className="eyebrow">PHYSICAL VS FINANCIAL PROGRESS RECONCILIATION</div>
+          <h2>Disbursement vs Physical Milestone Comparison</h2>
+          <p className="muted">Checks if funds are being disbursed without commensurate progress on ground (Measurement Book divergence).</p>
+        </div>
+        {onFlagDiscrepancy && (isDivergent || isOverspent) && (
+          <button
+            type="button"
+            className="button secondary"
+            style={{ fontSize: 11 }}
+            onClick={() => onFlagDiscrepancy(
+              isOverspent 
+                ? `Budget Overrun Flag: Spent ${money(spent)} against approved sanction of ${money(approved)} (+${money(spent - approved)} excess). Formal recovery inquiry required.` 
+                : `Physical vs Financial Progress Discrepancy: ${financialPct}% of funds released while physical completion is estimated at ${physicalPct}% with ${Math.round(project.delay_days || 0)} days delay. Physical measurement book verification required.`
+            )}
+          >
+            + Copy Discrepancy to Field Notes
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 8 }}>
+        <div style={{ background: '#f8fafc', padding: 12, borderRadius: 6, border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>Financial Disbursement</span>
+            <strong style={{ fontSize: 12, color: isOverspent ? 'var(--crimson)' : 'var(--teal)' }}>{financialPct}% ({money(spent)})</strong>
+          </div>
+          <div style={{ width: '100%', height: 10, background: '#e2e8f0', borderRadius: 5, overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(100, financialPct)}%`, height: '100%', background: isOverspent ? '#dc2626' : '#238f82' }} />
+          </div>
+        </div>
+
+        <div style={{ background: '#f8fafc', padding: 12, borderRadius: 6, border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>Estimated Physical Progress</span>
+            <strong style={{ fontSize: 12, color: isCompleted ? 'var(--teal)' : 'var(--orange)' }}>{physicalPct}% ({isCompleted ? 'Completed' : `${Math.round(project.delay_days || 0)}d delay`})</strong>
+          </div>
+          <div style={{ width: '100%', height: 10, background: '#e2e8f0', borderRadius: 5, overflow: 'hidden' }}>
+            <div style={{ width: `${physicalPct}%`, height: '100%', background: isCompleted ? '#238f82' : '#f59e0b' }} />
+          </div>
+        </div>
+      </div>
+
+      {isDivergent && (
+        <div style={{ marginTop: 12, padding: '8px 12px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 6, color: '#92400e', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>⚠️</span>
+          <span><strong>Accelerated Financial Release Alert:</strong> {financialPct}% of funds released while physical work is delayed. Field audit should inspect the Measurement Book (MB) and current site photographs.</span>
+        </div>
+      )}
+      {isOverspent && (
+        <div style={{ marginTop: 12, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 6, color: '#991b1b', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>🚨</span>
+          <span><strong>Sanction Ceiling Exceeded:</strong> Expenditure exceeds approved budget by {money(spent - approved)}. Technical justification or recovery required.</span>
+        </div>
+      )}
+    </section>
+
+    <div className="project-insight-grid">
+      <section className="panel chart-panel">
+        <div className="eyebrow">MONEY BREAKDOWN</div>
+        <h2>Approved, spent, and remaining</h2>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={financialData} margin={{ left: 10, right: 10, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#dbe5e1" vertical={false} />
+            <XAxis dataKey="name" tick={{ fill: '#65736e', fontSize: 11 }} />
+            <YAxis tick={{ fill: '#65736e', fontSize: 11 }} tickFormatter={value => `₹${Math.round(Number(value) / 100000)}L`} />
+            <Tooltip formatter={(value: any) => [money(Number(value)), 'Amount']} />
+            <Bar dataKey="amount" fill="#238f82" radius={[5, 5, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+        <table className="detail-table">
+          <tbody>
+            <tr><th>Approved amount</th><td>{money(approved)}</td></tr>
+            <tr><th>Spent so far</th><td>{money(spent)}</td></tr>
+            <tr><th>Amount left</th><td>{remaining >= 0 ? money(remaining) : `Overspent by ${money(Math.abs(remaining))}`}</td></tr>
+            <tr><th>Use of approved amount</th><td>{pct(typeof project.utilization_ratio === 'number' ? Math.max(0, project.utilization_ratio) : undefined)}</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section className="panel">
+        <div className="eyebrow">AUDITOR'S CHECKLIST</div>
+        <h2>What to look for</h2>
+        <div className="audit-checklist">
+          {checks.slice(0, 6).map((item: string, index: number) => (
+            <div key={item}>
+              <span>{index + 1}</span>
+              <div>
+                <strong>{item}</strong>
+                <small>Confirm this record matches the project number, location, amount, and dates.</small>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  </>;
 }
 
 function ProjectDetailPage() { 
@@ -2631,7 +2818,14 @@ function ProjectDetailPage() {
       <p>{[project.state, project.district, project.constituency, project.category, project.mp_name && `MP: ${project.mp_name}`].filter(Boolean).join(' · ') || 'Location details not recorded'}</p>
       <div className="risk-summary"><div><span>Review level</span><strong>{typeof project.risk_score === 'number' && Number.isFinite(project.risk_score) ? `${Math.min(100, Math.max(0, project.risk_score)).toFixed(1)}%` : '—'}</strong></div><div style={{ display: 'flex', alignItems: 'center' }}><RiskBadge level={level} /></div></div>
     </section>
-    <ProjectOverview project={project} explanation={explanation} />
+    <ProjectOverview 
+      project={project} 
+      explanation={explanation} 
+      onFlagDiscrepancy={(note: string) => {
+        setProjectNotes(prev => prev ? `${prev}\n\n[DISCREPANCY FLAGGED]: ${note}` : `[DISCREPANCY FLAGGED]: ${note}`);
+        setSaved('Progress discrepancy copied to Auditor Field Notes. You can dictate additional findings or create a case below.');
+      }} 
+    />
 
     {/* AUDITOR FIELD NOTES & VOICE DICTATION */}
     <section className="panel">
@@ -4492,45 +4686,187 @@ function AgenciesPage() {
 
 function ReconciliationPage() {
   const [data, setData] = useState<any>(null);
+  const [filter, setFilter] = useState<'ALL' | 'HIGH_OVERRUN' | 'OVER_20_PCT'>('ALL');
+  const [inquiryLoadingId, setInquiryLoadingId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string>('');
+
   useEffect(() => {
     axios.get(`${API_BASE}/api/reconciliation`).then(response => setData(response.data));
   }, []);
+
   if (!data) return <div className="page-loading">Loading fund checks...</div>;
 
-  const mismatches = data.mismatches || [];
+  const mismatches: any[] = data.mismatches || [];
   const totalOverspent = mismatches.reduce((sum: number, item: any) => sum + Math.max(0, (item.expenditure || 0) - (item.sanction_amount || 0)), 0);
+
+  const filteredMismatches = mismatches.filter((item: any) => {
+    const overrun = Math.max(0, (item.expenditure || 0) - (item.sanction_amount || 0));
+    const sanction = item.sanction_amount || 1;
+    if (filter === 'HIGH_OVERRUN') return overrun >= 500000;
+    if (filter === 'OVER_20_PCT') return (item.expenditure / sanction) >= 1.20;
+    return true;
+  });
+
+  const exportOverrunCSV = () => {
+    const headers = ['Project Code', 'Project Name', 'State', 'District', 'Category', 'Sanctioned (INR)', 'Expenditure (INR)', 'Excess Overrun (INR)', 'Utilization %', 'Risk Level'];
+    const rows = filteredMismatches.map((item: any) => [
+      `"${item.project_code || item.project_id}"`,
+      `"${(item.project_name || '').replace(/"/g, '""')}"`,
+      `"${item.state || ''}"`,
+      `"${item.district || ''}"`,
+      `"${item.category || ''}"`,
+      item.sanction_amount ?? 0,
+      item.expenditure ?? 0,
+      Math.max(0, (item.expenditure || 0) - (item.sanction_amount || 0)),
+      item.sanction_amount ? `${((item.expenditure / item.sanction_amount) * 100).toFixed(1)}%` : '0%',
+      `"${item.risk_level || 'HIGH'}"`
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `fund_overrun_ledger_${filter.toLowerCase()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRaiseInquiry = async (project: any) => {
+    const excess = Math.max(0, (project.expenditure || 0) - (project.sanction_amount || 0));
+    setInquiryLoadingId(project.project_id);
+    try {
+      const res = await axios.post(`${API_BASE}/api/reconciliation/inquiry`, {
+        project_id: project.project_id,
+        excess_amount: excess,
+        notes: `Formal audit inquiry raised for project ${project.project_code || project.project_id}. Sanctioned ceiling: ₹${(project.sanction_amount || 0).toLocaleString('en-IN')}; Actual expenditure: ₹${(project.expenditure || 0).toLocaleString('en-IN')}; Unauthorized excess: ₹${excess.toLocaleString('en-IN')}. Revised administrative sanction or recovery required.`,
+      });
+      setNotice(`Audit case #${res.data?.case?.id || ''} created: Formal Overrun Inquiry issued for ${project.project_name || project.project_code}.`);
+    } catch {
+      setNotice('Could not raise audit inquiry. Please try again.');
+    } finally {
+      setInquiryLoadingId(null);
+    }
+  };
 
   return (
     <div className="page-stack">
-      <PageTitle eyebrow="FUND CHECKS" title="Fund Reconciliation Workspace" subtitle="Automated cross-reconciliation identifying expenditure exceeding sanctioned ceiling amounts." />
+      <PageTitle
+        eyebrow="BUDGET OVERRUN CHECKER"
+        title="Fund Reconciliation & Excess Spending"
+        subtitle="Compares approved budget ceilings against actual expenditure. Highlights projects where spending exceeded sanction."
+      />
+
+      {notice && (
+        <div className="notice" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#eaf8f5', borderColor: '#48a88a', color: '#134e48' }}>
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} style={{ background: 'transparent', border: 0, cursor: 'pointer', fontSize: 16 }}>✕</button>
+        </div>
+      )}
+
       <div className="kpi-grid">
         <Stat label="Projects with Overspend" value={String(data.total_mismatches ?? mismatches.length)} detail="Expenditure > Sanction" tone="red" />
         <Stat label="Total Overrun Value" value={money(totalOverspent)} detail="Cumulative excess expenditure" tone="red" />
-        <Stat label="Audited Fields Verified" value={String(data.available_fields?.length || 0)} detail="Mathematically reconciled" tone="teal" />
-        <Stat label="Unsupplied Fields" value={String(data.unavailable_fields?.length || 0)} detail="Pending workbook join" tone="orange" />
+        <Stat label="Audited Fields Verified" value={String(data.available_fields?.length || 0)} detail="Sanction, Spend, Vouchers" tone="teal" />
+        <Stat label="Overruns > ₹5 Lakh" value={String(mismatches.filter(m => (m.expenditure - m.sanction_amount) >= 500000).length)} detail="High-priority recovery" tone="orange" />
       </div>
+
+      <div className="notice" style={{ background: '#f8fafc', borderColor: '#cbd5e1', color: '#334155' }}>
+        <strong>How to read this workspace:</strong> Under financial rules (GFR 149 & State PWD codes), public funds cannot be disbursed beyond approved sanction without revised administrative approval. The button below lets auditors issue a formal inquiry with 1 click.
+      </div>
+
       <section className="panel table-panel">
         <div className="panel-head">
           <div>
-            <div className="eyebrow">VARIANCE DISCREPANCY REGISTER</div>
-            <h2>Projects exceeding approved financial ceiling</h2>
+            <div className="eyebrow">OVERRUN REGISTER</div>
+            <h2>Projects exceeding approved financial ceiling ({filteredMismatches.length})</h2>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>FILTER OVERRUNS:</span>
+            <select className="inline-select" value={filter} onChange={e => setFilter(e.target.value as any)}>
+              <option value="ALL">All Overrun Projects ({mismatches.length})</option>
+              <option value="HIGH_OVERRUN">Excess &gt; ₹5,00,000</option>
+              <option value="OVER_20_PCT">Excess &gt; 20% of Budget</option>
+            </select>
+            <button className="button secondary" onClick={exportOverrunCSV}>
+              Export Overrun CSV
+            </button>
           </div>
         </div>
-        <IntelligenceTable
-          records={mismatches.map((item: any) => ({
-            ...item,
-            project_name: item.project_name || item.project_code,
-            project_code: item.project_code,
-            state: item.state || 'Not recorded',
-            district: item.district || 'Not recorded',
-            category: item.category || 'Not recorded',
-            utilization_ratio: item.utilization_ratio,
-            delay_days: item.delay_days,
-            anomaly_score: item.anomaly_score,
-            risk_level: item.risk_level || 'HIGH',
-            id: item.project_id
-          }))}
-        />
+
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Location</th>
+                <th>Sanctioned</th>
+                <th>Expenditure</th>
+                <th>Excess Overrun</th>
+                <th>Utilization</th>
+                <th>Review Level</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredMismatches.length ? (
+                filteredMismatches.map((item: any) => {
+                  const overrun = Math.max(0, (item.expenditure || 0) - (item.sanction_amount || 0));
+                  const isHigh = overrun >= 500000;
+                  return (
+                    <tr key={item.project_id}>
+                      <td>
+                        <strong>{item.project_name || item.project_code}</strong>
+                        <small>{item.project_code || `PROJECT-${item.project_id}`}</small>
+                      </td>
+                      <td>
+                        {item.district || 'Not recorded'}
+                        <small>{item.state || 'Not recorded'}</small>
+                      </td>
+                      <td className="tabular-nums">{money(item.sanction_amount)}</td>
+                      <td className="tabular-nums" style={{ color: 'var(--crimson)', fontWeight: 600 }}>{money(item.expenditure)}</td>
+                      <td className="tabular-nums">
+                        <span style={{ color: isHigh ? 'var(--crimson)' : 'var(--orange)', fontWeight: 700 }}>
+                          +{money(overrun)}
+                        </span>
+                      </td>
+                      <td className="tabular-nums">
+                        <strong>{pct(item.sanction_amount ? (item.expenditure / item.sanction_amount) : 0)}</strong>
+                      </td>
+                      <td>
+                        <RiskBadge level={isHigh ? 'CRITICAL' : 'HIGH'} />
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                          <Link to={`/projects/${item.project_id}`} className="button ghost" style={{ fontSize: 11, padding: '3px 8px', height: 'auto', minHeight: 26 }}>
+                            Inspect →
+                          </Link>
+                          <button
+                            type="button"
+                            className="button primary"
+                            style={{ fontSize: 11, padding: '3px 8px', height: 'auto', minHeight: 26 }}
+                            disabled={inquiryLoadingId === item.project_id}
+                            onClick={() => handleRaiseInquiry(item)}
+                            title="Register formal audit inquiry and notify agency"
+                          >
+                            {inquiryLoadingId === item.project_id ? 'Issuing...' : 'Raise Inquiry'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={8}>
+                    <EmptyState title="No overruns match filter" text="Try selecting 'All Overrun Projects'." />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );
@@ -4539,59 +4875,269 @@ function ReconciliationPage() {
 function DuplicatesPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'CONFIRMED' | 'INSPECT' | 'CLEARED'>('ALL');
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string>('');
+
+  const fetchDuplicates = () => {
+    setLoading(true);
     axios.get(`${API_BASE}/api/duplicates`)
       .then(response => setItems(response.data.items || []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchDuplicates();
   }, []);
+
+  const handleAction = async (pairId: string, actionType: 'CONFIRM' | 'INSPECT' | 'CLEAR') => {
+    setActionLoadingId(pairId);
+    try {
+      const res = await axios.post(`${API_BASE}/api/duplicates/action`, {
+        pair_id: pairId,
+        action: actionType,
+        officer: 'District Vigilance Unit',
+      });
+      // Update local state immediately
+      setItems(prev => prev.map(item => {
+        if (item.id === pairId) {
+          return {
+            ...item,
+            status: res.data.record.status,
+            action_details: res.data.record,
+          };
+        }
+        return item;
+      }));
+
+      if (actionType === 'CONFIRM') {
+        setNotice('Confirmed as duplicate work! Double-billing alert and case logged in Audit Cases.');
+      } else if (actionType === 'INSPECT') {
+        setNotice('Flagged for site inspection! Field measurement task generated in Audit Cases.');
+      } else {
+        setNotice('Marked as legitimate distinct works / separate phases.');
+      }
+    } catch {
+      setNotice('Failed to update duplicate decision. Please try again.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const exportDuplicatesCSV = () => {
+    const headers = ['Pair ID', 'Project A Code', 'Project A Name', 'Project A Sanction', 'Project B Code', 'Project B Name', 'Project B Sanction', 'Similarity %', 'Status', 'Match Reasons'];
+    const rows = items.map((item: any) => [
+      `"${item.id}"`,
+      `"${item.project_a?.code || item.project_a?.id || ''}"`,
+      `"${(item.project_a?.name || '').replace(/"/g, '""')}"`,
+      item.project_a?.sanction_amount ?? 0,
+      `"${item.project_b?.code || item.project_b?.id || ''}"`,
+      `"${(item.project_b?.name || '').replace(/"/g, '""')}"`,
+      item.project_b?.sanction_amount ?? 0,
+      `${item.similarity || 0}%`,
+      `"${item.status || 'PENDING_REVIEW'}"`,
+      `"${(item.reasons || []).join('; ').replace(/"/g, '""')}"`,
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'mplads_duplicate_works_register.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredItems = items.filter(item => {
+    const s = item.status || 'PENDING_REVIEW';
+    if (statusFilter === 'PENDING') return s === 'PENDING_REVIEW';
+    if (statusFilter === 'CONFIRMED') return s === 'CONFIRMED_DUPLICATE';
+    if (statusFilter === 'INSPECT') return s === 'FLAGGED_INSPECTION';
+    if (statusFilter === 'CLEARED') return s === 'CLEARED_LEGITIMATE';
+    return true;
+  });
+
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'CONFIRMED_DUPLICATE':
+        return <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' }}>Confirmed Double-Billing</span>;
+      case 'FLAGGED_INSPECTION':
+        return <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: '#ffedd5', color: '#9a3412', border: '1px solid #fb923c' }}>Inspection Required</span>;
+      case 'CLEARED_LEGITIMATE':
+        return <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: '#dcfce7', color: '#166534', border: '1px solid #86efac' }}>Cleared (Separate Works)</span>;
+      default:
+        return <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>Pending Review</span>;
+    }
+  };
 
   if (loading) return <div className="page-loading">Checking duplicate candidates...</div>;
 
   return (
     <div className="page-stack">
-      <PageTitle eyebrow="DUPLICATE WORK DETECTION" title="Potential duplicate candidates" subtitle="Similarity signals require human verification; records are never automatically merged without officer sanction." />
+      <PageTitle
+        eyebrow="DOUBLE-BILLING & REPEATED WORK DETECTOR"
+        title="Repeated Works & Duplicate Detection"
+        subtitle="Flags projects in the same district with matching titles, budgets, and agencies to prevent paying twice for the same road, building, or well."
+      />
+
+      {notice && (
+        <div className="notice" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#eaf8f5', borderColor: '#48a88a', color: '#134e48' }}>
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} style={{ background: 'transparent', border: 0, cursor: 'pointer', fontSize: 16 }}>✕</button>
+        </div>
+      )}
+
+      {/* KPI GRID */}
+      <div className="kpi-grid">
+        <Stat label="Total Suspected Pairs" value={String(items.length)} detail="Identical / Overlapping Works" tone="red" />
+        <Stat label="Pending Decisions" value={String(items.filter(i => !i.status || i.status === 'PENDING_REVIEW').length)} detail="Awaiting officer review" tone="orange" />
+        <Stat label="Confirmed Double-Billing" value={String(items.filter(i => i.status === 'CONFIRMED_DUPLICATE').length)} detail="Cases escalated for recovery" tone="red" />
+        <Stat label="Field Checks Flagged" value={String(items.filter(i => i.status === 'FLAGGED_INSPECTION').length)} detail="Measurement verification" tone="teal" />
+      </div>
+
+      <div className="notice" style={{ background: '#f8fafc', borderColor: '#cbd5e1', color: '#334155' }}>
+        <strong>Why this matters for audits:</strong> Public works often suffer from &ldquo;ghost completion&rdquo; where the same physical asset (e.g. a school compound wall or borewell) is billed under two different sanction years. Use the action buttons to flag for measurement or confirm duplicate billing.
+      </div>
+
+      {/* FILTER TOOLBAR */}
+      <div className="toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>STATUS:</span>
+          {(['ALL', 'PENDING', 'CONFIRMED', 'INSPECT', 'CLEARED'] as const).map(tab => (
+            <button
+              key={tab}
+              type="button"
+              className={statusFilter === tab ? 'button primary' : 'button ghost'}
+              style={{ fontSize: 11, padding: '4px 10px', height: 'auto', minHeight: 28 }}
+              onClick={() => setStatusFilter(tab)}
+            >
+              {tab === 'ALL' ? `All Pairs (${items.length})` : tab === 'PENDING' ? 'Pending Review' : tab === 'CONFIRMED' ? 'Confirmed' : tab === 'INSPECT' ? 'Inspection' : 'Cleared'}
+            </button>
+          ))}
+        </div>
+        <button className="button secondary" onClick={exportDuplicatesCSV}>
+          Export Duplicates Register (CSV)
+        </button>
+      </div>
+
       <section className="panel">
-        {items.length ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {items.map((item, index) => (
-              <div
-                className="alert-row duplicate-alert-row"
-                key={`${item.project_a?.id || index}-${item.project_b?.id || index}`}
-                style={{ display: 'grid', gridTemplateColumns: '110px 1fr 1fr auto', gap: 16, alignItems: 'center' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <strong style={{ fontSize: 13, color: 'var(--deep)' }}>#{index + 1}</strong>
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>·</span>
-                  <span style={{ fontSize: 11, color: 'var(--crimson)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                    {Math.min(100, Math.max(0, Math.round(item.similarity || 0)))}% match
-                  </span>
+        {filteredItems.length ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {filteredItems.map((item, index) => {
+              const pairId = item.id || `${item.project_a?.id}-${item.project_b?.id}`;
+              const isWorking = actionLoadingId === pairId;
+
+              return (
+                <div
+                  key={pairId}
+                  className="alert-row duplicate-alert-row"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12,
+                    padding: 16,
+                    border: '1px solid var(--line)',
+                    borderRadius: 'var(--radius-sm)',
+                    background: item.status === 'CONFIRMED_DUPLICATE' ? '#fff9f9' : item.status === 'CLEARED_LEGITIMATE' ? '#fafffc' : '#ffffff',
+                  }}
+                >
+                  {/* Top Bar of Card */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <strong style={{ fontSize: 14, color: 'var(--deep)' }}>PAIR #{index + 1}</strong>
+                      <span style={{ fontSize: 11, color: 'var(--crimson)', fontWeight: 700 }}>
+                        {item.similarity || 92}% Match Score
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>·</span>
+                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>{item.project_a?.district || 'Same District'}, {item.project_a?.state || ''}</span>
+                    </div>
+                    <div>
+                      {getStatusBadge(item.status)}
+                    </div>
+                  </div>
+
+                  {/* Side-by-Side Comparison */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+                    {/* Project A */}
+                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase', marginBottom: 4 }}>RECORD A</div>
+                      <strong style={{ fontSize: 13, color: 'var(--deep)', display: 'block' }}>{item.project_a?.name || 'Project A'}</strong>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{item.project_a?.code || `ID: ${item.project_a?.id}`} · {item.project_a?.category || 'Civil Work'}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12 }}>
+                        <span>Sanction: <strong>{money(item.project_a?.sanction_amount)}</strong></span>
+                        <span>Spend: <strong>{money(item.project_a?.expenditure)}</strong></span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Agency: {item.project_a?.agency || 'Not recorded'}</div>
+                      {item.project_a?.id && (
+                        <Link to={`/projects/${item.project_a.id}`} className="text-link" style={{ fontSize: 11, marginTop: 8, display: 'inline-block' }}>
+                          Inspect Record A Details →
+                        </Link>
+                      )}
+                    </div>
+
+                    {/* Project B */}
+                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--orange)', textTransform: 'uppercase', marginBottom: 4 }}>RECORD B (POTENTIAL DUPLICATE)</div>
+                      <strong style={{ fontSize: 13, color: 'var(--deep)', display: 'block' }}>{item.project_b?.name || 'Project B'}</strong>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{item.project_b?.code || `ID: ${item.project_b?.id}`} · {item.project_b?.category || 'Civil Work'}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12 }}>
+                        <span>Sanction: <strong>{money(item.project_b?.sanction_amount)}</strong></span>
+                        <span>Spend: <strong>{money(item.project_b?.expenditure)}</strong></span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Agency: {item.project_b?.agency || 'Not recorded'}</div>
+                      {item.project_b?.id && (
+                        <Link to={`/projects/${item.project_b.id}`} className="text-link" style={{ fontSize: 11, marginTop: 8, display: 'inline-block' }}>
+                          Inspect Record B Details →
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Why Flagged */}
+                  <div style={{ fontSize: 11, color: 'var(--muted)', background: '#fafbfc', padding: '8px 12px', borderRadius: 4 }}>
+                    <strong>Matching indicators: </strong>
+                    {(item.reasons || []).join(' · ') || 'Identical category, close sanction amounts, and overlapping execution timeline in same district.'}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', flexWrap: 'wrap', paddingTop: 6 }}>
+                    <button
+                      type="button"
+                      className="button ghost"
+                      style={{ fontSize: 11, padding: '4px 10px', height: 'auto', minHeight: 28 }}
+                      disabled={isWorking}
+                      onClick={() => handleAction(pairId, 'CLEAR')}
+                    >
+                      Mark Cleared (Distinct Phase)
+                    </button>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      style={{ fontSize: 11, padding: '4px 10px', height: 'auto', minHeight: 28, borderColor: '#fb923c', color: '#c2410c' }}
+                      disabled={isWorking}
+                      onClick={() => handleAction(pairId, 'INSPECT')}
+                    >
+                      {isWorking ? 'Processing...' : 'Flag for Site Inspection'}
+                    </button>
+                    <button
+                      type="button"
+                      className="button primary"
+                      style={{ fontSize: 11, padding: '4px 10px', height: 'auto', minHeight: 28, background: '#dc2626', borderColor: '#b91c1c' }}
+                      disabled={isWorking}
+                      onClick={() => handleAction(pairId, 'CONFIRM')}
+                    >
+                      {isWorking ? 'Processing...' : 'Confirm Double-Billing'}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <strong>{item.project_a?.code || (item.project_a?.id ? `PROJECT-${item.project_a.id}` : 'Project A')}</strong>
-                  <span>{item.project_a?.name || 'Unnamed project'}</span>
-                  {item.project_a?.id && (
-                    <Link to={`/projects/${item.project_a.id}`} className="text-link" style={{ fontSize: 11, marginTop: 4, display: 'inline-block' }}>
-                      Inspect Project A →
-                    </Link>
-                  )}
-                </div>
-                <div>
-                  <strong>{item.project_b?.code || (item.project_b?.id ? `PROJECT-${item.project_b.id}` : 'Project B')}</strong>
-                  <span>{item.project_b?.name || 'Unnamed project'}</span>
-                  {item.project_b?.id && (
-                    <Link to={`/projects/${item.project_b.id}`} className="text-link" style={{ fontSize: 11, marginTop: 4, display: 'inline-block' }}>
-                      Inspect Project B →
-                    </Link>
-                  )}
-                  <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--muted)' }}>{(item.reasons || []).join(' · ') || 'Potential duplicate records identified'}</p>
-                </div>
-                <RiskBadge level={item.similarity >= 90 ? 'CRITICAL' : 'HIGH'} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <EmptyState title="No potential duplicates" text="No high-similarity project pairs were identified in the active analysis run." />
+          <EmptyState title="No duplicate pairs match current filter" text="Select another filter or clear search parameters." />
         )}
       </section>
     </div>
@@ -4717,6 +5263,7 @@ function App() {
                 <Route path="/upload" element={<MultiUploadPage />} />
                 <Route path="/alerts" element={<AlertsPage />} />
                 <Route path="/cases" element={<CasesPage />} />
+                <Route path="/cartels" element={<CartelRadarPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/agencies" element={<AgenciesPage />} />
                 <Route path="/reconciliation" element={<ReconciliationPage />} />

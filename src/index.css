@@ -105,8 +105,56 @@ a {
   flex-direction: column;
   padding: 24px 16px 20px;
   z-index: 40;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), flex-basis 0.25s ease, width 0.25s ease;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar.collapsed {
+  display: none !important;
+}
+
+.sidebar-hide-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #a2ded1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-hide-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.sidebar-show-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  background: #112d27;
+  border: 1px solid #23584e;
+  color: #8ceddc;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 14px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-show-btn:hover {
+  background: #19463d;
+  color: #ffffff;
+  border-color: #388f80;
 }
 
 .brand {

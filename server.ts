@@ -249,15 +249,38 @@ function generateProjects(): Project[] {
   for (let i = 0; i < patterns.length; i++) {
     const id = i + 1;
     const pattern = patterns[i];
-    const state = stateKeys[Math.floor(random() * stateKeys.length)];
-    const districts = STATE_DISTRICTS[state];
-    const district = districts[Math.floor(random() * districts.length)];
-    const constituency = `${district} Parliamentary Constituency`;
+    let state = stateKeys[Math.floor(random() * stateKeys.length)];
+    let districts = STATE_DISTRICTS[state];
+    let district = districts[Math.floor(random() * districts.length)];
+    let constituency = `${district} Parliamentary Constituency`;
     const category = categoryKeys[Math.floor(random() * categoryKeys.length)];
     const [baseAmount, baseMonths] = CATEGORIES[category];
     const agency = AGENCIES[Math.floor(random() * AGENCIES.length)];
     const vendor = VENDORS[Math.floor(random() * VENDORS.length)];
-    const mp = MP_NAMES[Math.floor(random() * MP_NAMES.length)];
+    let mp = MP_NAMES[Math.floor(random() * MP_NAMES.length)];
+
+    // Seed predictable jurisdictions for realistic multi-tier RBAC demos
+    if (id <= 25) {
+      state = 'Karnataka';
+      if (id <= 14) {
+        district = 'Bengaluru Urban';
+        if (id <= 8) {
+          constituency = 'Bengaluru Central';
+          mp = 'Shri P. C. Mohan (MP, Bengaluru Central)';
+        } else {
+          constituency = 'Bengaluru South';
+          mp = 'Hon. Suresh Kumar Hegde, MP';
+        }
+      } else if (id <= 20) {
+        district = 'Mysuru';
+        constituency = 'Mysuru Parliamentary Constituency';
+        mp = 'Hon. Suresh Kumar Hegde, MP';
+      } else {
+        district = 'Belagavi';
+        constituency = 'Belagavi Parliamentary Constituency';
+        mp = 'Hon. Meenakshi Sundaram, MP';
+      }
+    }
 
     let sanction = Math.round((baseAmount * (0.7 + random() * 0.7)) / 1000) * 1000;
     let utilRatio = 0.45 + random() * 0.45;
@@ -521,6 +544,22 @@ function authenticate(req: Request, res: Response, next: NextFunction) {
   return res.status(401).json({ detail: 'Invalid or expired session token.' });
 }
 
+function getAuthenticatedUser(req: Request): User | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.substring(7);
+  try {
+    const raw = Buffer.from(token, 'base64').toString('utf-8');
+    const parsed = JSON.parse(raw);
+    const user = users.find(u => u.id === parsed.id || u.email === parsed.email);
+    if (user && user.status === 'ACTIVE') return user;
+  } catch {
+    const user = users.find(u => u.email === token || token.includes(u.email));
+    if (user && user.status === 'ACTIVE') return user;
+  }
+  return null;
+}
+
 // --- API ROUTES ---
 
 // 1. Auth
@@ -664,11 +703,70 @@ app.get('/api/auth/audit-log/integrity', authenticate, (_req, res) => {
 
 // 2. Dashboard
 app.get('/api/dashboard', (req, res) => {
+  const authUser = getAuthenticatedUser(req);
   const stateFilter = (req.query.state as string) || '';
   const categoryFilter = (req.query.category as string) || '';
   const riskFilter = (req.query.risk_level as string) || '';
 
-  let filtered = projects;
+  // Determine base projects for user role (Role-Based Access Control)
+  let baseProjects = projects;
+  let jurisdictionScope: any = {
+    role: authUser?.role || 'MINISTRY',
+    scope_type: authUser?.scope_type || 'NATIONAL',
+    scope_id: authUser?.scope_id || 'National',
+    scope_title: 'National Oversight (All 16 States)',
+    authority_title: 'Ministry of Statistics & Programme Implementation',
+    default_state: '',
+    default_district: '',
+    is_national: true,
+  };
+
+  if (authUser?.role === 'STATE_NODAL_AUTHORITY') {
+    const targetState = authUser.scope_state || authUser.scope_id || 'Karnataka';
+    baseProjects = projects.filter(p => p.state && p.state.toLowerCase() === targetState.toLowerCase());
+    jurisdictionScope = {
+      role: 'STATE_NODAL_AUTHORITY',
+      scope_type: 'STATE',
+      scope_id: targetState,
+      scope_state: targetState,
+      scope_title: `State Jurisdiction: ${targetState} (State Nodal Cell)`,
+      authority_title: `State Nodal Authority · Government of ${targetState}`,
+      default_state: targetState,
+      default_district: '',
+      is_state: true,
+    };
+  } else if (authUser?.role === 'DISTRICT_AUTHORITY') {
+    const targetDistrict = authUser.scope_id || 'Bengaluru Urban';
+    baseProjects = projects.filter(p => p.district && p.district.toLowerCase() === targetDistrict.toLowerCase());
+    jurisdictionScope = {
+      role: 'DISTRICT_AUTHORITY',
+      scope_type: 'DISTRICT',
+      scope_id: targetDistrict,
+      scope_state: authUser.scope_state || 'Karnataka',
+      scope_title: `District Jurisdiction: ${targetDistrict} (${authUser.scope_state || 'Karnataka'})`,
+      authority_title: `District Authority · Office of the Deputy Commissioner, ${targetDistrict}`,
+      default_state: authUser.scope_state || 'Karnataka',
+      default_district: targetDistrict,
+      is_district: true,
+    };
+  } else if (authUser?.role === 'MEMBER_OF_PARLIAMENT') {
+    const targetConstituency = authUser.scope_id || 'Bengaluru Central';
+    baseProjects = projects.filter(p => p.constituency && p.constituency.toLowerCase() === targetConstituency.toLowerCase());
+    jurisdictionScope = {
+      role: 'MEMBER_OF_PARLIAMENT',
+      scope_type: 'CONSTITUENCY',
+      scope_id: targetConstituency,
+      scope_state: authUser.scope_state || 'Karnataka',
+      scope_title: `Parliamentary Constituency: ${targetConstituency}`,
+      authority_title: `Office of the Member of Parliament · ${targetConstituency}`,
+      default_state: authUser.scope_state || 'Karnataka',
+      default_district: 'Bengaluru Urban',
+      is_constituency: true,
+      mp_name: 'Shri P. C. Mohan (MP, Bengaluru Central)',
+    };
+  }
+
+  let filtered = baseProjects;
   if (stateFilter) filtered = filtered.filter(p => p.state === stateFilter);
   if (categoryFilter) filtered = filtered.filter(p => p.category === categoryFilter);
   if (riskFilter) filtered = filtered.filter(p => p.risk_level === riskFilter);
@@ -685,6 +783,26 @@ app.get('/api/dashboard', (req, res) => {
     CRITICAL: critical,
     DATA_QUALITY_REVIEW: filtered.filter(p => p.risk_level === 'DATA_QUALITY_REVIEW').length,
   };
+
+  // Scoped active alerts for role
+  const scopedAlerts = authUser?.role === 'STATE_NODAL_AUTHORITY'
+    ? alerts.filter(a => a.state && a.state.toLowerCase() === (authUser.scope_state || 'Karnataka').toLowerCase())
+    : authUser?.role === 'DISTRICT_AUTHORITY' || authUser?.role === 'MEMBER_OF_PARLIAMENT'
+    ? alerts.filter(a => a.district && a.district.toLowerCase() === (authUser.scope_id || 'Bengaluru Urban').toLowerCase())
+    : alerts;
+
+  // MP Allocation statutory quota data
+  const mp_allocation = authUser?.role === 'MEMBER_OF_PARLIAMENT' ? {
+    annual_quota: 50000000,
+    total_sanctioned: totalSanction,
+    total_expenditure: totalExpenditure,
+    unspent_balance: Math.max(0, 50000000 - totalSanction),
+    utilization_rate: totalSanction > 0 ? Number((totalExpenditure / totalSanction).toFixed(3)) : 0,
+    works_recommended: filtered.length,
+    completed_works: filtered.filter(p => p.status === 'Completed').length,
+    in_progress_works: filtered.filter(p => p.status !== 'Completed').length,
+    delayed_works: filtered.filter(p => p.delay_days > 45).length,
+  } : null;
 
   // State wise aggregates
   const statesMap: Record<string, {
@@ -874,7 +992,7 @@ app.get('/api/dashboard', (req, res) => {
     national_average_risk: nationalAverageRisk,
     high_risk_projects: highRisk + critical,
     critical_projects: critical,
-    active_alerts: alerts.length,
+    active_alerts: scopedAlerts.length,
     risk_distribution: riskDist,
     alert_distribution: { CRITICAL: critical, HIGH: highRisk, MEDIUM: riskDist.MEDIUM },
     state_wise,
@@ -887,7 +1005,11 @@ app.get('/api/dashboard', (req, res) => {
     model_status: 'Ready',
     dataset_status: 'Loaded',
     top_projects: topProjects,
-    state_options: Object.keys(STATE_DISTRICTS).sort(),
+    state_options: authUser?.role === 'STATE_NODAL_AUTHORITY' || authUser?.role === 'DISTRICT_AUTHORITY' || authUser?.role === 'MEMBER_OF_PARLIAMENT'
+      ? [authUser.scope_state || 'Karnataka']
+      : Object.keys(STATE_DISTRICTS).sort(),
+    jurisdiction_scope: jurisdictionScope,
+    mp_allocation,
   });
 });
 
@@ -995,6 +1117,7 @@ app.get('/api/districts', (req, res) => {
 
 // 3. Projects List & Details
 app.get('/api/projects', (req, res) => {
+  const authUser = getAuthenticatedUser(req);
   const page = parseInt(req.query.page as string, 10) || 1;
   const pageSize = parseInt(req.query.page_size as string, 10) || 50;
   const query = (req.query.search as string || '').toLowerCase().trim();
@@ -1003,7 +1126,20 @@ app.get('/api/projects', (req, res) => {
   const district = (req.query.district as string || '').toLowerCase().trim();
   const category = req.query.category as string;
 
-  let filtered = projects;
+  // Base projects based on RBAC jurisdiction
+  let baseProjects = projects;
+  if (authUser?.role === 'STATE_NODAL_AUTHORITY') {
+    const targetState = authUser.scope_state || authUser.scope_id || 'Karnataka';
+    baseProjects = projects.filter(p => p.state && p.state.toLowerCase() === targetState.toLowerCase());
+  } else if (authUser?.role === 'DISTRICT_AUTHORITY') {
+    const targetDistrict = authUser.scope_id || 'Bengaluru Urban';
+    baseProjects = projects.filter(p => p.district && p.district.toLowerCase() === targetDistrict.toLowerCase());
+  } else if (authUser?.role === 'MEMBER_OF_PARLIAMENT') {
+    const targetConstituency = authUser.scope_id || 'Bengaluru Central';
+    baseProjects = projects.filter(p => p.constituency && p.constituency.toLowerCase() === targetConstituency.toLowerCase());
+  }
+
+  let filtered = baseProjects;
   if (query) {
     filtered = filtered.filter(p =>
       p.project_name.toLowerCase().includes(query) ||
@@ -1306,13 +1442,40 @@ app.get('/api/integration/coverage', (_req, res) => {
 });
 
 // 5. Alerts
-app.get('/api/alerts', (_req, res) => {
-  res.json({ items: alerts });
+app.get('/api/alerts', (req, res) => {
+  const authUser = getAuthenticatedUser(req);
+  let filteredAlerts = alerts;
+
+  if (authUser?.role === 'STATE_NODAL_AUTHORITY') {
+    const targetState = authUser.scope_state || authUser.scope_id || 'Karnataka';
+    filteredAlerts = alerts.filter(a => a.state && a.state.toLowerCase() === targetState.toLowerCase());
+  } else if (authUser?.role === 'DISTRICT_AUTHORITY') {
+    const targetDistrict = authUser.scope_id || 'Bengaluru Urban';
+    filteredAlerts = alerts.filter(a => a.district && a.district.toLowerCase() === targetDistrict.toLowerCase());
+  } else if (authUser?.role === 'MEMBER_OF_PARLIAMENT') {
+    filteredAlerts = alerts.filter(a => a.district && a.district.toLowerCase() === 'bengaluru urban');
+  }
+
+  res.json({ items: filteredAlerts });
 });
 
 // 6. Audit Cases
-app.get('/api/audit-cases', (_req, res) => {
-  res.json({ items: auditCases });
+app.get('/api/audit-cases', (req, res) => {
+  const authUser = getAuthenticatedUser(req);
+  let scopedCases = auditCases;
+
+  if (authUser?.role === 'DISTRICT_AUTHORITY') {
+    const districtProjIds = new Set(projects.filter(p => p.district && p.district.toLowerCase() === 'bengaluru urban').map(p => p.id));
+    scopedCases = auditCases.filter(c => districtProjIds.has(c.project_id) || (c.assigned_authority && c.assigned_authority.toLowerCase().includes('district')));
+  } else if (authUser?.role === 'STATE_NODAL_AUTHORITY') {
+    const stateProjIds = new Set(projects.filter(p => p.state && p.state.toLowerCase() === 'karnataka').map(p => p.id));
+    scopedCases = auditCases.filter(c => stateProjIds.has(c.project_id) || (c.assigned_authority && (c.assigned_authority.toLowerCase().includes('karnataka') || c.assigned_authority.toLowerCase().includes('state'))));
+  } else if (authUser?.role === 'MEMBER_OF_PARLIAMENT') {
+    const constProjIds = new Set(projects.filter(p => p.constituency && p.constituency.toLowerCase() === 'bengaluru central').map(p => p.id));
+    scopedCases = auditCases.filter(c => constProjIds.has(c.project_id));
+  }
+
+  res.json({ items: scopedCases });
 });
 
 app.post('/api/audit-cases', (req, res) => {
@@ -1404,6 +1567,8 @@ app.get('/api/reconciliation', (_req, res) => {
 });
 
 // 9. Duplicates
+const duplicateActions: Record<string, { status: string; notes?: string; officer?: string; updated_at: string }> = {};
+
 app.get('/api/duplicates', (_req, res) => {
   const dupProjects = projects.filter(p => p.duplicate_flag);
   const items = [];
@@ -1411,20 +1576,87 @@ app.get('/api/duplicates', (_req, res) => {
     const a = dupProjects[i];
     const b = dupProjects[i + 1] || projects[i + 2];
     if (a && b) {
+      const pairKey = `${a.id}-${b.id}`;
+      const action = duplicateActions[pairKey] || { status: 'PENDING_REVIEW' };
       items.push({
-        project_a: { id: a.id, code: a.project_code, name: a.project_name },
-        project_b: { id: b.id, code: b.project_code, name: b.project_name },
+        id: pairKey,
+        project_a: { id: a.id, code: a.project_code, name: a.project_name, state: a.state, district: a.district, category: a.category, sanction_amount: a.sanction_amount, expenditure: a.expenditure, agency: a.agency },
+        project_b: { id: b.id, code: b.project_code, name: b.project_name, state: b.state, district: b.district, category: b.category, sanction_amount: b.sanction_amount, expenditure: b.expenditure, agency: b.agency },
         similarity: 92,
+        status: action.status,
+        action_details: action,
         reasons: [
           `Matching category (${a.category}) in ${a.district}, ${a.state}`,
           `Close sanction values: ₹${a.sanction_amount.toLocaleString('en-IN')} vs ₹${b.sanction_amount.toLocaleString('en-IN')}`,
-          'Identical executing agency and work timeline',
+          'Identical executing agency and overlapping timeline',
         ],
       });
     }
   }
 
   res.json({ items });
+});
+
+app.post('/api/duplicates/action', (req, res) => {
+  const { pair_id, action, notes, officer } = req.body;
+  if (!pair_id) return res.status(400).json({ error: 'pair_id required' });
+
+  const record = {
+    status: action === 'CONFIRM' ? 'CONFIRMED_DUPLICATE' : action === 'INSPECT' ? 'FLAGGED_INSPECTION' : 'CLEARED_LEGITIMATE',
+    notes: notes || '',
+    officer: officer || 'District Vigilance Officer',
+    updated_at: new Date().toISOString(),
+  };
+  duplicateActions[pair_id] = record;
+
+  // Create connected Audit Case for administrative tracking
+  const [idA, idB] = pair_id.split('-');
+  const projA = projects.find(p => p.id === Number(idA));
+  const projB = projects.find(p => p.id === Number(idB));
+
+  if (action === 'CONFIRM' || action === 'INSPECT') {
+    const isConfirm = action === 'CONFIRM';
+    const newCase: AuditCase = {
+      id: auditCases.length + 1,
+      project_id: Number(idA),
+      title: isConfirm 
+        ? `Double-Billing Investigation: ${projA?.project_name || idA} & ${projB?.project_name || idB}`
+        : `Physical Site Inspection: Verify duplicate work sites (${idA} vs ${idB})`,
+      priority: isConfirm ? 'CRITICAL' : 'HIGH',
+      status: 'OPEN',
+      assigned_authority: officer || 'District Vigilance Unit',
+      notes: notes || (isConfirm 
+        ? `Confirmed potential duplicate works. Expenditure freeze recommended across ${projA?.agency || 'agency'}.` 
+        : `On-site physical measurement required to confirm if separate physical assets exist on ground.`),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    auditCases.unshift(newCase);
+  }
+
+  res.json({ success: true, record });
+});
+
+app.post('/api/reconciliation/inquiry', (req, res) => {
+  const { project_id, excess_amount, notes, authority } = req.body;
+  const project = projects.find(p => p.id === Number(project_id));
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const overrunText = excess_amount ? `₹${Number(excess_amount).toLocaleString('en-IN')}` : 'excess expenditure';
+  const newCase: AuditCase = {
+    id: auditCases.length + 1,
+    project_id: project.id,
+    title: `Budget Overrun Inquiry: ${project.project_name} (${overrunText} above sanction)`,
+    priority: 'HIGH',
+    status: 'OPEN',
+    assigned_authority: authority || 'District Accounts Officer',
+    notes: notes || `Expenditure (₹${project.expenditure.toLocaleString('en-IN')}) exceeds approved financial ceiling (₹${project.sanction_amount.toLocaleString('en-IN')}). Formal recovery and revised sanction justification required.`,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  auditCases.unshift(newCase);
+
+  res.json({ success: true, case: newCase });
 });
 
 // 10. Data Quality
@@ -1606,6 +1838,127 @@ app.post('/api/datasets/:id/privacy-scan', (req, res) => {
     privacy_status: 'COMPLIANT_WITH_MASKING',
     pii_detected: false,
     columns: [],
+  });
+});
+
+// ==========================================
+// 12. CARTEL & COLLUSION RADAR (SIH)
+// ==========================================
+
+// 12A. Cartel & Collusion Detector Endpoint
+app.get('/api/forensics/cartels', (_req, res) => {
+  const rings = [
+    {
+      id: 'RING-01',
+      name: 'Apex-Shivalik-Pragati Bidder Syndicate',
+      risk_score: 94,
+      severity: 'CRITICAL',
+      total_pooled_value: 84500000,
+      contract_count: 14,
+      location: 'Bengaluru Urban & Pune',
+      primary_contractor: 'Apex Civil Infrastructure Ltd.',
+      interconnected_bidders: ['Apex Civil Infrastructure Ltd.', 'Shivalik Infra & Water Projects', 'Pragati Building Works'],
+      flags: [
+        'Shared Corporate Office: Plot 42-B, Industrial Area Ph-II, Bengaluru',
+        'Common Director DIN: DIN-08492019 (Shri Rajesh M. Singhal)',
+        'Rotational Bidding Cycle: Alternating L1/L2 winners in 12 consecutive tenders',
+        'Bid Submission IP Concurrency: Tenders submitted within 180s from same subnet (103.21.x.x)',
+      ],
+      centrality_score: 0.89,
+      cover_bidding_probability: 0.92,
+      cvc_violation_code: 'CVC-ANTI-CARTEL-01',
+    },
+    {
+      id: 'RING-02',
+      name: 'Kaveri-Sunrise Civic Alliance',
+      risk_score: 88,
+      severity: 'HIGH',
+      total_pooled_value: 51200000,
+      contract_count: 9,
+      location: 'Chennai & Mysuru',
+      primary_contractor: 'Kaveri Construction Syndicate',
+      interconnected_bidders: ['Kaveri Construction Syndicate', 'Sunrise Public Contracting Ltd.'],
+      flags: [
+        'Matching Bank Guarantee Branch: State Bank of India, Branch Code SBIN0004128',
+        'Common Contact Telephone & Domain Registrar: @civicpartners.in',
+        'Cover Bidding Margin: Sunrise bids consistently +8.4% above Kaveri in water supply tenders',
+        'Shared Equipment / Machinery Registry: Identical RTO vehicle registration numbers in tender affidavits',
+      ],
+      centrality_score: 0.76,
+      cover_bidding_probability: 0.84,
+      cvc_violation_code: 'CVC-ANTI-CARTEL-02',
+    },
+    {
+      id: 'RING-03',
+      name: 'Metro-Eastern Earthmovers Syndicate',
+      risk_score: 72,
+      severity: 'MEDIUM',
+      total_pooled_value: 38000000,
+      contract_count: 6,
+      location: 'Kolkata & Patna',
+      primary_contractor: 'Metro Civic Works Pvt Ltd',
+      interconnected_bidders: ['Metro Civic Works Pvt Ltd', 'Eastern Geo-Infra Partners'],
+      flags: [
+        'Complementary Bidding: Eastern Geo-Infra bids above ceiling to satisfy mandatory 3-bid qualification',
+        'Common Auditor Firm: M/s S.K. Goyal & Associates (FRN 012948N)',
+        'Bid Deposit Cheque Number Sequence: Consecutive serial numbers in earnest money deposit (EMD)',
+      ],
+      centrality_score: 0.62,
+      cover_bidding_probability: 0.74,
+      cvc_violation_code: 'CVC-ANTI-CARTEL-03',
+    },
+  ];
+
+  // Graph Nodes
+  const nodes = [
+    // Contractors
+    { id: 'c1', label: 'Apex Civil Infrastructure', type: 'CONTRACTOR', risk: 92, wins: 8, bids: 14, ring: 'RING-01' },
+    { id: 'c2', label: 'Shivalik Infra & Water', type: 'CONTRACTOR', risk: 85, wins: 5, bids: 12, ring: 'RING-01' },
+    { id: 'c3', label: 'Pragati Building Works', type: 'CONTRACTOR', risk: 78, wins: 1, bids: 11, ring: 'RING-01' },
+    { id: 'c4', label: 'Kaveri Construction', type: 'CONTRACTOR', risk: 88, wins: 6, bids: 9, ring: 'RING-02' },
+    { id: 'c5', label: 'Sunrise Public Contracting', type: 'CONTRACTOR', risk: 82, wins: 3, bids: 9, ring: 'RING-02' },
+    { id: 'c6', label: 'Metro Civic Works', type: 'CONTRACTOR', risk: 74, wins: 5, bids: 7, ring: 'RING-03' },
+    { id: 'c7', label: 'Eastern Geo-Infra', type: 'CONTRACTOR', risk: 68, wins: 1, bids: 6, ring: 'RING-03' },
+    // Shared Entity Nodes
+    { id: 'e1', label: 'DIN-08492019 (Rajesh Singhal)', type: 'SHARED_DIRECTOR', risk: 95, ring: 'RING-01' },
+    { id: 'e2', label: 'Plot 42-B, Ind. Area Ph-II, BLR', type: 'SHARED_ADDRESS', risk: 90, ring: 'RING-01' },
+    { id: 'e3', label: 'SBI Branch SBIN0004128', type: 'BANK_BRANCH', risk: 85, ring: 'RING-02' },
+    { id: 'e4', label: 'Contact: @civicpartners.in', type: 'COMMON_CONTACT', risk: 80, ring: 'RING-02' },
+    { id: 'e5', label: 'Auditor: S.K. Goyal & Assoc.', type: 'COMMON_AUDITOR', risk: 65, ring: 'RING-03' },
+  ];
+
+  // Graph Edges
+  const edges = [
+    // Ring 01 Edges
+    { source: 'c1', target: 'e1', type: 'DIRECTOR_LINK', label: 'Director DIN', risk: 95 },
+    { source: 'c2', target: 'e1', type: 'DIRECTOR_LINK', label: 'Director DIN', risk: 95 },
+    { source: 'c1', target: 'e2', type: 'ADDRESS_LINK', label: 'Registered Office', risk: 90 },
+    { source: 'c2', target: 'e2', type: 'ADDRESS_LINK', label: 'Registered Office', risk: 90 },
+    { source: 'c3', target: 'e2', type: 'ADDRESS_LINK', label: 'Sub-Office', risk: 85 },
+    { source: 'c1', target: 'c2', type: 'ROTATIONAL_BIDDING', label: 'Rotational L1/L2 (8 Tenders)', risk: 94 },
+    { source: 'c2', target: 'c3', type: 'COVER_BID', label: 'Cover Bids (+11%)', risk: 80 },
+    // Ring 02 Edges
+    { source: 'c4', target: 'e3', type: 'BANK_LINK', label: 'BG Issued SBIN0004128', risk: 88 },
+    { source: 'c5', target: 'e3', type: 'BANK_LINK', label: 'BG Issued SBIN0004128', risk: 88 },
+    { source: 'c4', target: 'e4', type: 'CONTACT_LINK', label: 'Common Domain & Phone', risk: 82 },
+    { source: 'c5', target: 'e4', type: 'CONTACT_LINK', label: 'Common Domain & Phone', risk: 82 },
+    { source: 'c4', target: 'c5', type: 'COVER_BID', label: 'Cover Bidding (+8.4%)', risk: 86 },
+    // Ring 03 Edges
+    { source: 'c6', target: 'e5', type: 'AUDITOR_LINK', label: 'Common Auditor', risk: 68 },
+    { source: 'c7', target: 'e5', type: 'AUDITOR_LINK', label: 'Common Auditor', risk: 68 },
+    { source: 'c6', target: 'c7', type: 'COVER_BID', label: 'Synthetic 3rd Bid', risk: 74 },
+  ];
+
+  res.json({
+    rings,
+    graph: { nodes, edges },
+    metrics: {
+      total_cartel_rings: rings.length,
+      high_risk_contractors: 7,
+      total_pooled_exposure: 173700000,
+      total_rigged_tenders: 29,
+      cvc_inquiry_readiness: 'EVIDENCE_GRADE_COMPLETE',
+    },
   });
 });
 
