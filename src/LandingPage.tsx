@@ -80,12 +80,10 @@ export default function LandingPage() {
     try {
       if (demoPayloads[role]) {
         await login(demoPayloads[role]);
-        navigate('/');
-      } else {
-        navigate('/login');
       }
+      navigate('/dashboard');
     } catch {
-      navigate('/login');
+      navigate('/dashboard');
     } finally {
       setLoggingInRole(null);
     }

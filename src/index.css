@@ -4539,3 +4539,176 @@ a {
   border-color: #fca5a5;
   color: #991b1b;
 }
+
+/* ==========================================================================
+   Role-Based Intelligence Workspace Styles
+   ========================================================================== */
+.role-intelligence-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.role-jurisdiction-banner {
+  background: linear-gradient(135deg, #11332e 0%, #194f47 100%);
+  color: #ffffff;
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 16px rgba(17, 51, 46, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.role-jurisdiction-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 680px;
+}
+
+.role-seal-crest {
+  font-size: 36px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.role-jurisdiction-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #7cecd8;
+  margin-bottom: 4px;
+}
+
+.role-jurisdiction-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 6px 0;
+  letter-spacing: -0.01em;
+}
+
+.role-jurisdiction-sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.role-jurisdiction-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.role-officer-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 6px 12px;
+  border-radius: 20px;
+}
+
+.role-officer-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #238f82;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.role-officer-pill strong {
+  display: block;
+  font-size: 12.5px;
+  color: #ffffff;
+}
+
+.role-officer-pill small {
+  display: block;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.role-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.role-indicator-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.role-indicator-badge.role-ministry {
+  background: #ecd8b0;
+  color: #785215;
+}
+
+.role-indicator-badge.role-state_nodal_authority {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.role-indicator-badge.role-district_authority {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.role-indicator-badge.role-member_of_parliament {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.role-scope-badge, .role-perm-badge {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.role-audit-actions-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.role-audit-fallback {
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
