@@ -190,8 +190,8 @@ export default function MultiUploadPage() {
   };
 
   const removeFile = (name: string) => {
-    setFiles(previous => previous.filter(file => file.name !== name));
-    setInspected(previous => previous.filter(file => file.filename !== name));
+    setFiles(previous => (Array.isArray(previous) ? previous.filter(file => file.name !== name) : []));
+    setInspected(previous => (Array.isArray(previous) ? previous.filter(file => file.filename !== name) : []));
   };
 
   const inspect = async () => {
@@ -202,9 +202,10 @@ export default function MultiUploadPage() {
     files.forEach(file => form.append('files', file));
     try {
       const response = await axios.post(`${API_BASE}/api/inspect-datasets`, form);
-      setInspected(response.data.files);
+      setInspected(Array.isArray(response.data?.files) ? response.data.files : []);
       setStage('Map');
     } catch (error: any) {
+      setInspected([]);
       setResult({ error: error.response?.data?.detail || error.message || 'Dataset inspection failed' });
       setStage('Results');
     } finally {
@@ -486,7 +487,7 @@ export default function MultiUploadPage() {
       <div className="dataset-list">
         {files.length ? (
           files.map(file => {
-            const info = inspected.find(item => item.filename === file.name);
+            const info = (inspected || []).find(item => item?.filename === file.name);
             return (
               <div className="dataset-card" key={file.name}>
                 <div>
@@ -512,7 +513,7 @@ export default function MultiUploadPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {info.column_mapping.map(mapping => (
+                              {(info.column_mapping || []).map(mapping => (
                                 <tr key={`${mapping.uploaded_column}-${mapping.canonical_field}`}>
                                   <td>{mapping.uploaded_column}</td>
                                   <td>{mapping.canonical_field}</td>

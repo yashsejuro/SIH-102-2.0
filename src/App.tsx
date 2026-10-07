@@ -2434,7 +2434,7 @@ function DashboardPage() {
                       </div>
                     </>
                   ) : (() => {
-                    const row = dashboard.state_wise.find(item => item.name === activeViewedState);
+                    const row = (dashboard.state_wise || []).find(item => item.name === activeViewedState);
                     const isPreview = !selectedState && activeViewedState === hoveredState;
                     return row ? (
                       <>
@@ -2580,7 +2580,7 @@ function DashboardPage() {
           selectedDistrict={selectedDistrict}
           onSelectDistrict={dist => setSelectedDistrict(dist)}
           districts={activeStateDistricts}
-          stateRow={dashboard.state_wise.find(s => s.name === selectedState)}
+          stateRow={(dashboard.state_wise || []).find(s => s.name === selectedState)}
           nationalAvgRisk={
             typeof (dashboard as any).national_average_risk === 'number'
               ? (dashboard as any).national_average_risk
