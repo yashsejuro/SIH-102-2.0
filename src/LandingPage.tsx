@@ -112,7 +112,7 @@ export default function LandingPage() {
               🏛️
             </div>
             <div>
-              <div className="landing-brand-super">SMART INDIA HACKATHON 2024 · CIVIC TECH & GOVERNANCE</div>
+              <div className="landing-brand-super">SMART INDIA HACKATHON 2026 · CIVIC TECH & GOVERNANCE</div>
               <div className="landing-brand-title">MPLADS Audit Intelligence Platform</div>
             </div>
           </div>
@@ -586,7 +586,7 @@ export default function LandingPage() {
               )}
             </div>
             <div className="landing-bottom-foot">
-              <span>Smart India Hackathon 2024 · Ministry of Statistics and Programme Implementation (MoSPI)</span>
+              <span>Smart India Hackathon 2026 · Ministry of Statistics and Programme Implementation (MoSPI)</span>
             </div>
           </div>
         </section>
@@ -597,7 +597,7 @@ export default function LandingPage() {
         <div className="landing-footer-inner">
           <div>
             <strong>MPLADS AI Monitoring & Audit Intelligence Platform</strong>
-            <p>Built for Smart India Hackathon (SIH) 2024 · Problem Statement Solution</p>
+            <p>Built for Smart India Hackathon (SIH) 2026 · Problem Statement Solution</p>
           </div>
           <div className="landing-footer-links">
             <Link to="/login">Sign In</Link>

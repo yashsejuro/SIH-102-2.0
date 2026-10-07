@@ -11,6 +11,7 @@ import { API_BASE, Role, useAuth, HasPermission, PermissionGate } from './auth';
 import { VoiceDictation } from './VoiceDictation';
 import LandingPage from './LandingPage';
 import RoleDashboardSection from './RoleDashboardSection';
+import { Skeleton, DashboardSkeleton, ProjectDetailSkeleton } from './Skeleton';
 import { STATE_BBOXES, STATE_DISTRICTS, getDistrictCoordinates, generateDistrictCellPath } from './mapData';
 const levels = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 const palette: Record<string, string> = { LOW: '#48a88a', MEDIUM: '#d7a64a', HIGH: '#e4774c', CRITICAL: '#d95b67' };
@@ -1985,7 +1986,7 @@ function DashboardPage() {
     }).catch(() => setReviewError('Compliance, fraud-risk, and source coverage could not be loaded for this analysis run.'));
   }, [selectedRunId]);
 
-  if (!dashboard) return <div className="page-loading">Loading intelligence workspace...</div>;
+  if (!dashboard) return <DashboardSkeleton />;
   const riskData = levels.map(level => ({ name: level, value: dashboard.risk_distribution?.[level] || 0 }));
   const stateData = (dashboard.state_wise || []).slice(0, 8).map(row => ({ name: row.name.replace(' Pradesh', ''), risk: Number(row.average_risk.toFixed(1)), projects: row.projects }));
 
@@ -3360,7 +3361,7 @@ function ProjectDetailPage() {
   }, [id, runId]);
 
   if (loadError) return <div className="page-stack"><section className="panel"><h2>Unable to open this project</h2><p>{loadError}</p><Link className="text-link" to="/projects">Return to projects</Link></section></div>;
-  if (!project) return <div className="page-loading">Loading investigation workspace...</div>; 
+  if (!project) return <ProjectDetailSkeleton />;
 
   const saveProjectNotes = async () => {
     setSavingNotes(true);
