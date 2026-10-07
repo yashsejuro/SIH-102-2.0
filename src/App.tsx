@@ -12,6 +12,7 @@ import { VoiceDictation } from './VoiceDictation';
 import LandingPage from './LandingPage';
 import RoleDashboardSection from './RoleDashboardSection';
 import { Skeleton, DashboardSkeleton, ProjectDetailSkeleton } from './Skeleton';
+import { DashboardErrorBoundary, DashboardApiErrorFallback } from './DashboardErrorBoundary';
 import { STATE_BBOXES, STATE_DISTRICTS, getDistrictCoordinates, generateDistrictCellPath } from './mapData';
 const levels = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 const palette: Record<string, string> = { LOW: '#48a88a', MEDIUM: '#d7a64a', HIGH: '#e4774c', CRITICAL: '#d95b67' };
@@ -1804,6 +1805,8 @@ function DashboardPage() {
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [districtProjects, setDistrictProjects] = useState<Project[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = useState<boolean>(false);
   const selectedRunId = new URLSearchParams(location.search).get('run_id');
 
   // Automatic Jurisdiction Scope Initialization for District & State Roles
@@ -1923,6 +1926,7 @@ function DashboardPage() {
   };
 
   const fetchDashboardData = () => {
+    setDashboardError(null);
     axios.get(`${API_BASE}/api/dashboard`, {
       params: {
         run_id: selectedRunId || undefined,
@@ -1933,12 +1937,21 @@ function DashboardPage() {
       }
     }).then(response => {
       setDashboard(response.data);
+      setDashboardError(null);
+      setIsRetrying(false);
       if (response.data?.role_metrics) {
         setRoleMetrics(response.data.role_metrics);
       }
       change('stateOptions', (response.data.state_options || []).join('|'));
     }).catch(err => {
       console.error('Failed to load dashboard', err);
+      setIsRetrying(false);
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'Unable to retrieve dashboard intelligence workspace data from API.';
+      setDashboardError(message);
     });
 
     // Also fetch dedicated unique role metrics endpoint
@@ -1947,6 +1960,12 @@ function DashboardPage() {
     }).then(res => {
       setRoleMetrics((prev: any) => ({ ...prev, ...res.data }));
     }).catch(() => {});
+  };
+
+  const handleRetryDashboard = () => {
+    setIsRetrying(true);
+    setDashboardError(null);
+    fetchDashboardData();
   };
 
   useEffect(() => {
@@ -1986,6 +2005,16 @@ function DashboardPage() {
     }).catch(() => setReviewError('Compliance, fraud-risk, and source coverage could not be loaded for this analysis run.'));
   }, [selectedRunId]);
 
+  if (dashboardError && !dashboard) {
+    return (
+      <DashboardApiErrorFallback
+        error={dashboardError}
+        onRetry={handleRetryDashboard}
+        isRetrying={isRetrying}
+      />
+    );
+  }
+
   if (!dashboard) return <DashboardSkeleton />;
   const riskData = levels.map(level => ({ name: level, value: dashboard.risk_distribution?.[level] || 0 }));
   const stateData = (dashboard.state_wise || []).slice(0, 8).map(row => ({ name: row.name.replace(' Pradesh', ''), risk: Number(row.average_risk.toFixed(1)), projects: row.projects }));
@@ -2008,6 +2037,40 @@ function DashboardPage() {
 
   return (
     <div className="page-stack">
+      {/* Non-blocking API Refresh Error Banner */}
+      {dashboardError && dashboard && (
+        <div
+          role="alert"
+          style={{
+            background: '#fff1f2',
+            border: '1.5px solid #fecdd3',
+            borderRadius: 8,
+            padding: '12px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ color: '#e11d48', fontSize: 18 }}>⚠️</span>
+            <div>
+              <strong style={{ color: '#9f1239', fontSize: 13 }}>Failed to refresh dashboard with new parameters:</strong>{' '}
+              <span style={{ color: '#be123c', fontSize: 12 }}>{dashboardError}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={handleRetryDashboard}
+            disabled={isRetrying}
+            style={{ fontSize: 12, padding: '4px 10px', height: 'auto' }}
+          >
+            {isRetrying ? 'Retrying...' : 'Retry Refresh'}
+          </button>
+        </div>
+      )}
       {/* Toast Feedback */}
       {undoToast && (
         <div className="notice" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ecfdf5', borderColor: '#a7f3d0' }}>
@@ -5920,7 +5983,9 @@ function RootRoute() {
   return (
     <ProtectedRoute>
       <Shell>
-        <DashboardPage />
+        <DashboardErrorBoundary>
+          <DashboardPage />
+        </DashboardErrorBoundary>
       </Shell>
     </ProtectedRoute>
   );
@@ -5938,8 +6003,22 @@ function App() {
           <ProtectedRoute>
             <Shell>
               <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route
+                  path="/"
+                  element={
+                    <DashboardErrorBoundary>
+                      <DashboardPage />
+                    </DashboardErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <DashboardErrorBoundary>
+                      <DashboardPage />
+                    </DashboardErrorBoundary>
+                  }
+                />
                 <Route path="/risk" element={<RiskPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/projects/:id" element={<ProjectPageBoundary><ProjectDetailPage /></ProjectPageBoundary>} />
