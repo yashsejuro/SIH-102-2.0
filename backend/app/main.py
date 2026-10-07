@@ -238,6 +238,8 @@ def initialize_database():
             'cross_dataset_conflict': 'BOOLEAN', 'calamity_type': 'VARCHAR', 'calamity_name': 'VARCHAR',
             'consent_date': 'VARCHAR', 'consent_amount': 'FLOAT', 'mp_name': 'VARCHAR', 'allocation_limit': 'FLOAT',
             'vendor_name': 'VARCHAR', 'payment_status': 'VARCHAR',
+            'duration_days': 'FLOAT', 'negative_duration_flag': 'BOOLEAN', 'negative_financial_flag': 'BOOLEAN',
+            'ml_score_percentile': 'FLOAT', 'peer_group_level': 'VARCHAR', 'peer_count': 'INTEGER',
         },
         'datasets': {
             'storage_name': 'VARCHAR', 'detected_role': 'VARCHAR', 'selected_sheet': 'VARCHAR', 'mapping': 'JSON',

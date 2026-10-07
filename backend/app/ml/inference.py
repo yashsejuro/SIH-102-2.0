@@ -129,5 +129,6 @@ def infer_from_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     output['ml_anomaly_flag'] = (predictions == -1).astype(int)
     output['ml_anomaly_score'] = scores
     output['normalized_ml_score'] = np.clip((scores - lower) / denominator, 0.0, 1.0)
+    output['ml_score_percentile'] = pd.Series(scores, index=output.index).rank(pct=True, method='average') * 100.0
     output['model_version'] = metadata.get('model_version', 'unversioned-legacy-artifact')
     return output
