@@ -474,7 +474,7 @@ function generateProjects(): Project[] {
 }
 
 const BASELINE_PROJECTS: Project[] = generateProjects();
-const projects: Project[] = JSON.parse(JSON.stringify(BASELINE_PROJECTS));
+let projects: Project[] = JSON.parse(JSON.stringify(BASELINE_PROJECTS));
 
 function generateBaselineAlerts(projs: Project[]): Alert[] {
   return projs
@@ -506,7 +506,15 @@ interface ActiveDatasetState {
   records_count: number;
 }
 
-let activeDatasetState: ActiveDatasetState | null = null;
+let activeDatasetState: ActiveDatasetState | null = {
+  has_custom_dataset: true,
+  dataset_name: 'MPLADS_Works_Register_Q3_FY24-25.xlsx',
+  files: ['MPLADS_Works_Register_Q3_FY24-25.xlsx', 'Expenditure_Sanctions_Ledger.csv'],
+  uploaded_at: Date.now() - 60 * 1000, // Ingested 1 min ago, ~14 mins grace period remaining
+  grace_period_seconds: 900, // 15 mins (900s)
+  run_id: 1,
+  records_count: 180,
+};
 
 // In-memory Audit Cases
 let auditCases: AuditCase[] = [
@@ -644,30 +652,41 @@ function authenticate(req: Request, res: Response, next: NextFunction) {
 }
 
 function getAuthenticatedUser(req: Request): User | null {
+  if ((req as any).user) return (req as any).user;
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.substring(7);
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
 
-  if (token.startsWith('demo-offline-token-')) {
-    const role = token.replace('demo-offline-token-', '');
-    return users.find(u => u.role === role) || users[0];
+    if (token.startsWith('demo-offline-token-')) {
+      const role = token.replace('demo-offline-token-', '');
+      const matched = users.find(u => u.role === role);
+      if (matched) return matched;
+    }
+
+    try {
+      const raw = Buffer.from(token, 'base64').toString('utf-8');
+      const parsed = JSON.parse(raw);
+      const user = users.find(u => u.id === parsed.id || u.email === parsed.email || (parsed.role && u.role === parsed.role));
+      if (user && user.status === 'ACTIVE') return user;
+    } catch {
+      const lower = token.toLowerCase();
+      const user = users.find(u =>
+        u.email.toLowerCase() === lower ||
+        lower.includes(u.email.toLowerCase()) ||
+        lower.includes(u.role.toLowerCase())
+      );
+      if (user && user.status === 'ACTIVE') return user;
+    }
   }
 
-  try {
-    const raw = Buffer.from(token, 'base64').toString('utf-8');
-    const parsed = JSON.parse(raw);
-    const user = users.find(u => u.id === parsed.id || u.email === parsed.email || (parsed.role && u.role === parsed.role));
-    if (user && user.status === 'ACTIVE') return user;
-  } catch {
-    const lower = token.toLowerCase();
-    const user = users.find(u =>
-      u.email.toLowerCase() === lower ||
-      lower.includes(u.email.toLowerCase()) ||
-      lower.includes(u.role.toLowerCase())
-    );
+  // Fallback to role provided in request query or headers
+  const roleParam = (req.query?.role || req.headers['x-user-role']) as string;
+  if (roleParam) {
+    const user = users.find(u => u.role === roleParam);
     if (user && user.status === 'ACTIVE') return user;
   }
-  return users[0];
+
+  return null;
 }
 
 // --- API ROUTES ---
@@ -807,6 +826,10 @@ app.get('/api/auth/audit-log/integrity', authenticate, (_req, res) => {
 // 2. Dashboard
 app.get('/api/dashboard', (req, res) => {
   const authUser = getAuthenticatedUser(req);
+  const clientRole = (req.query.role || req.headers['x-user-role']) as string;
+  const effectiveRole = authUser?.role || clientRole || 'MINISTRY';
+  const effectiveUser = authUser || (clientRole ? users.find(u => u.role === clientRole) : users[0]);
+
   const stateFilter = (req.query.state as string) || '';
   const categoryFilter = (req.query.category as string) || '';
   const riskFilter = (req.query.risk_level as string) || '';
@@ -814,9 +837,9 @@ app.get('/api/dashboard', (req, res) => {
   // Determine base projects for user role (Role-Based Access Control)
   let baseProjects = projects;
   let jurisdictionScope: any = {
-    role: authUser?.role || 'MINISTRY',
-    scope_type: authUser?.scope_type || 'NATIONAL',
-    scope_id: authUser?.scope_id || 'National',
+    role: effectiveRole,
+    scope_type: effectiveUser?.scope_type || 'NATIONAL',
+    scope_id: effectiveUser?.scope_id || 'National',
     scope_title: 'National Oversight (All 16 States)',
     authority_title: 'Ministry of Statistics & Programme Implementation',
     default_state: '',
@@ -824,8 +847,8 @@ app.get('/api/dashboard', (req, res) => {
     is_national: true,
   };
 
-  if (authUser?.role === 'STATE_NODAL_AUTHORITY') {
-    const targetState = authUser.scope_state || authUser.scope_id || 'Karnataka';
+  if (effectiveRole === 'STATE_NODAL_AUTHORITY') {
+    const targetState = effectiveUser?.scope_state || effectiveUser?.scope_id || 'Karnataka';
     baseProjects = projects.filter(p => p.state && p.state.toLowerCase() === targetState.toLowerCase());
     jurisdictionScope = {
       role: 'STATE_NODAL_AUTHORITY',
@@ -838,31 +861,31 @@ app.get('/api/dashboard', (req, res) => {
       default_district: '',
       is_state: true,
     };
-  } else if (authUser?.role === 'DISTRICT_AUTHORITY') {
-    const targetDistrict = authUser.scope_id || 'Bengaluru Urban';
+  } else if (effectiveRole === 'DISTRICT_AUTHORITY') {
+    const targetDistrict = effectiveUser?.scope_id || 'Bengaluru Urban';
     baseProjects = projects.filter(p => p.district && p.district.toLowerCase() === targetDistrict.toLowerCase());
     jurisdictionScope = {
       role: 'DISTRICT_AUTHORITY',
       scope_type: 'DISTRICT',
       scope_id: targetDistrict,
-      scope_state: authUser.scope_state || 'Karnataka',
-      scope_title: `District Jurisdiction: ${targetDistrict} (${authUser.scope_state || 'Karnataka'})`,
+      scope_state: effectiveUser?.scope_state || 'Karnataka',
+      scope_title: `District Jurisdiction: ${targetDistrict} (${effectiveUser?.scope_state || 'Karnataka'})`,
       authority_title: `District Authority · Office of the Deputy Commissioner, ${targetDistrict}`,
-      default_state: authUser.scope_state || 'Karnataka',
+      default_state: effectiveUser?.scope_state || 'Karnataka',
       default_district: targetDistrict,
       is_district: true,
     };
-  } else if (authUser?.role === 'MEMBER_OF_PARLIAMENT') {
-    const targetConstituency = authUser.scope_id || 'Bengaluru Central';
+  } else if (effectiveRole === 'MEMBER_OF_PARLIAMENT') {
+    const targetConstituency = effectiveUser?.scope_id || 'Bengaluru Central';
     baseProjects = projects.filter(p => p.constituency && p.constituency.toLowerCase() === targetConstituency.toLowerCase());
     jurisdictionScope = {
       role: 'MEMBER_OF_PARLIAMENT',
       scope_type: 'CONSTITUENCY',
       scope_id: targetConstituency,
-      scope_state: authUser.scope_state || 'Karnataka',
+      scope_state: effectiveUser?.scope_state || 'Karnataka',
       scope_title: `Parliamentary Constituency: ${targetConstituency}`,
       authority_title: `Office of the Member of Parliament · ${targetConstituency}`,
-      default_state: authUser.scope_state || 'Karnataka',
+      default_state: effectiveUser?.scope_state || 'Karnataka',
       default_district: 'Bengaluru Urban',
       is_constituency: true,
       mp_name: 'Shri P. C. Mohan (MP, Bengaluru Central)',
@@ -1394,6 +1417,10 @@ app.get('/api/districts', (req, res) => {
 // 3. Projects List & Details
 app.get('/api/projects', (req, res) => {
   const authUser = getAuthenticatedUser(req);
+  const clientRole = (req.query.role || req.headers['x-user-role']) as string;
+  const effectiveRole = authUser?.role || clientRole;
+  const effectiveUser = authUser || (clientRole ? users.find(u => u.role === clientRole) : null);
+
   const page = parseInt(req.query.page as string, 10) || 1;
   const pageSize = parseInt(req.query.page_size as string, 10) || 50;
   const query = (req.query.search as string || '').toLowerCase().trim();
@@ -1404,14 +1431,14 @@ app.get('/api/projects', (req, res) => {
 
   // Base projects based on RBAC jurisdiction
   let baseProjects = projects;
-  if (authUser?.role === 'STATE_NODAL_AUTHORITY') {
-    const targetState = authUser.scope_state || authUser.scope_id || 'Karnataka';
+  if (effectiveRole === 'STATE_NODAL_AUTHORITY') {
+    const targetState = effectiveUser?.scope_state || effectiveUser?.scope_id || 'Karnataka';
     baseProjects = projects.filter(p => p.state && p.state.toLowerCase() === targetState.toLowerCase());
-  } else if (authUser?.role === 'DISTRICT_AUTHORITY') {
-    const targetDistrict = authUser.scope_id || 'Bengaluru Urban';
+  } else if (effectiveRole === 'DISTRICT_AUTHORITY') {
+    const targetDistrict = effectiveUser?.scope_id || 'Bengaluru Urban';
     baseProjects = projects.filter(p => p.district && p.district.toLowerCase() === targetDistrict.toLowerCase());
-  } else if (authUser?.role === 'MEMBER_OF_PARLIAMENT') {
-    const targetConstituency = authUser.scope_id || 'Bengaluru Central';
+  } else if (effectiveRole === 'MEMBER_OF_PARLIAMENT') {
+    const targetConstituency = effectiveUser?.scope_id || 'Bengaluru Central';
     baseProjects = projects.filter(p => p.constituency && p.constituency.toLowerCase() === targetConstituency.toLowerCase());
   }
 
@@ -1720,15 +1747,18 @@ app.get('/api/integration/coverage', (_req, res) => {
 // 5. Alerts
 app.get('/api/alerts', (req, res) => {
   const authUser = getAuthenticatedUser(req);
+  const clientRole = (req.query.role || req.headers['x-user-role']) as string;
+  const effectiveRole = authUser?.role || clientRole;
+  const effectiveUser = authUser || (clientRole ? users.find(u => u.role === clientRole) : null);
   let filteredAlerts = alerts;
 
-  if (authUser?.role === 'STATE_NODAL_AUTHORITY') {
-    const targetState = authUser.scope_state || authUser.scope_id || 'Karnataka';
+  if (effectiveRole === 'STATE_NODAL_AUTHORITY') {
+    const targetState = effectiveUser?.scope_state || effectiveUser?.scope_id || 'Karnataka';
     filteredAlerts = alerts.filter(a => a.state && a.state.toLowerCase() === targetState.toLowerCase());
-  } else if (authUser?.role === 'DISTRICT_AUTHORITY') {
-    const targetDistrict = authUser.scope_id || 'Bengaluru Urban';
+  } else if (effectiveRole === 'DISTRICT_AUTHORITY') {
+    const targetDistrict = effectiveUser?.scope_id || 'Bengaluru Urban';
     filteredAlerts = alerts.filter(a => a.district && a.district.toLowerCase() === targetDistrict.toLowerCase());
-  } else if (authUser?.role === 'MEMBER_OF_PARLIAMENT') {
+  } else if (effectiveRole === 'MEMBER_OF_PARLIAMENT') {
     filteredAlerts = alerts.filter(a => a.district && a.district.toLowerCase() === 'bengaluru urban');
   }
 
@@ -1738,15 +1768,20 @@ app.get('/api/alerts', (req, res) => {
 // 6. Audit Cases
 app.get('/api/audit-cases', (req, res) => {
   const authUser = getAuthenticatedUser(req);
+  const clientRole = (req.query.role || req.headers['x-user-role']) as string;
+  const effectiveRole = authUser?.role || clientRole;
+  const effectiveUser = authUser || (clientRole ? users.find(u => u.role === clientRole) : null);
   let scopedCases = auditCases;
 
-  if (authUser?.role === 'DISTRICT_AUTHORITY') {
-    const districtProjIds = new Set(projects.filter(p => p.district && p.district.toLowerCase() === 'bengaluru urban').map(p => p.id));
+  if (effectiveRole === 'DISTRICT_AUTHORITY') {
+    const targetDistrict = effectiveUser?.scope_id || 'Bengaluru Urban';
+    const districtProjIds = new Set(projects.filter(p => p.district && p.district.toLowerCase() === targetDistrict.toLowerCase()).map(p => p.id));
     scopedCases = auditCases.filter(c => districtProjIds.has(c.project_id) || (c.assigned_authority && c.assigned_authority.toLowerCase().includes('district')));
-  } else if (authUser?.role === 'STATE_NODAL_AUTHORITY') {
-    const stateProjIds = new Set(projects.filter(p => p.state && p.state.toLowerCase() === 'karnataka').map(p => p.id));
-    scopedCases = auditCases.filter(c => stateProjIds.has(c.project_id) || (c.assigned_authority && (c.assigned_authority.toLowerCase().includes('karnataka') || c.assigned_authority.toLowerCase().includes('state'))));
-  } else if (authUser?.role === 'MEMBER_OF_PARLIAMENT') {
+  } else if (effectiveRole === 'STATE_NODAL_AUTHORITY') {
+    const targetState = effectiveUser?.scope_state || effectiveUser?.scope_id || 'Karnataka';
+    const stateProjIds = new Set(projects.filter(p => p.state && p.state.toLowerCase() === targetState.toLowerCase()).map(p => p.id));
+    scopedCases = auditCases.filter(c => stateProjIds.has(c.project_id) || (c.assigned_authority && (c.assigned_authority.toLowerCase().includes(targetState.toLowerCase()) || c.assigned_authority.toLowerCase().includes('state'))));
+  } else if (effectiveRole === 'MEMBER_OF_PARLIAMENT') {
     const constProjIds = new Set(projects.filter(p => p.constituency && p.constituency.toLowerCase() === 'bengaluru central').map(p => p.id));
     scopedCases = auditCases.filter(c => constProjIds.has(c.project_id));
   }
@@ -2059,11 +2094,24 @@ app.post('/api/analyze-multi', upload.array('files'), (req, res) => {
   const uploadedFiles = (req.files as Express.Multer.File[]) || [];
   activeRunId += 1;
   const runId = activeRunId;
+  const datasetName = uploadedFiles.map(f => f.originalname).join(', ') || 'Custom MPLADS Register';
+
+  // Record active undoable dataset state with 15-minute grace period
+  activeDatasetState = {
+    has_custom_dataset: true,
+    dataset_name: datasetName,
+    files: uploadedFiles.map(f => f.originalname),
+    uploaded_at: Date.now(),
+    grace_period_seconds: 900, // 15 mins (900 seconds)
+    run_id: runId,
+    records_count: Math.max(uploadedFiles.length * 45, 120),
+  };
 
   analysisRuns[runId] = {
     id: runId,
     is_active: true,
     created_at: new Date().toISOString(),
+    dataset_name: datasetName,
     summary: {
       rows_processed: Math.max(uploadedFiles.length * 45, 120),
       projects_created: Math.max(uploadedFiles.length * 40, 110),
@@ -2090,12 +2138,132 @@ app.post('/api/analyze-multi', upload.array('files'), (req, res) => {
     rows_processed: 180,
     projects_created: 180,
     alerts_created: 12,
+    undo_window_seconds: 900,
+    can_undo: true,
+    dataset_name: datasetName,
     datasets: uploadedFiles.map((f, i) => ({
       id: i + 1,
       file_name: f.originalname,
       integrity_status: 'VERIFIED',
       algorithm: 'SHA-256',
     })),
+  });
+});
+
+// Check dataset undo status and remaining time in grace period
+app.get('/api/datasets/undo-status', (_req, res) => {
+  if (!activeDatasetState) {
+    return res.json({
+      has_undoable_dataset: false,
+      message: 'No active uploaded dataset pending grace period.',
+    });
+  }
+  const now = Date.now();
+  const elapsedSeconds = Math.floor((now - activeDatasetState.uploaded_at) / 1000);
+  const remainingSeconds = Math.max(0, activeDatasetState.grace_period_seconds - elapsedSeconds);
+  const isExpired = remainingSeconds <= 0;
+
+  res.json({
+    has_undoable_dataset: !isExpired,
+    is_expired: isExpired,
+    dataset_name: activeDatasetState.dataset_name,
+    files: activeDatasetState.files,
+    uploaded_at: new Date(activeDatasetState.uploaded_at).toISOString(),
+    grace_period_seconds: activeDatasetState.grace_period_seconds,
+    seconds_remaining: remainingSeconds,
+    run_id: activeDatasetState.run_id,
+    records_count: activeDatasetState.records_count,
+  });
+});
+
+// Undo / Remove Dataset Endpoint within grace period
+app.post('/api/datasets/undo', (req, res) => {
+  if (!activeDatasetState) {
+    return res.status(400).json({ error: 'No uploaded dataset available to remove or undo.' });
+  }
+
+  const now = Date.now();
+  const elapsedSeconds = Math.floor((now - activeDatasetState.uploaded_at) / 1000);
+  if (elapsedSeconds > activeDatasetState.grace_period_seconds) {
+    return res.status(400).json({
+      error: `Undo grace period has expired (${Math.floor(elapsedSeconds / 60)} minutes elapsed). Dataset is committed into statutory audit ledger.`
+    });
+  }
+
+  const datasetName = activeDatasetState.dataset_name;
+  const revertedRunId = activeDatasetState.run_id;
+
+  // Restore canonical baseline data
+  projects = JSON.parse(JSON.stringify(BASELINE_PROJECTS));
+  alerts = generateBaselineAlerts(projects);
+
+  if (analysisRuns[revertedRunId]) {
+    delete analysisRuns[revertedRunId];
+  }
+  activeRunId = 1;
+  activeDatasetState = null;
+
+  // Log in audit cases
+  auditCases.unshift({
+    id: auditCases.length + 1,
+    project_id: projects[0].id,
+    title: `Dataset Ingestion Revoked: ${datasetName}`,
+    priority: 'LOW',
+    status: 'RESOLVED',
+    assigned_authority: 'Auditor Ingestion Gatekeeper',
+    notes: `Dataset "${datasetName}" was successfully removed within the 15-minute undo grace period window. Canonical baseline register restored.`,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
+  res.json({
+    success: true,
+    message: `Dataset "${datasetName}" was successfully removed. Audit register restored to canonical baseline.`,
+    reverted_run_id: revertedRunId,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// RESTful DELETE alias
+app.delete('/api/datasets/current', (_req, res) => {
+  if (!activeDatasetState) {
+    return res.status(400).json({ error: 'No active uploaded dataset to remove.' });
+  }
+  const datasetName = activeDatasetState.dataset_name;
+  const revertedRunId = activeDatasetState.run_id;
+  projects = JSON.parse(JSON.stringify(BASELINE_PROJECTS));
+  alerts = generateBaselineAlerts(projects);
+  if (analysisRuns[revertedRunId]) delete analysisRuns[revertedRunId];
+  activeRunId = 1;
+  activeDatasetState = null;
+  res.json({ success: true, message: `Dataset "${datasetName}" removed. Baseline restored.` });
+});
+
+// Emergency reset to baseline anytime
+app.post('/api/datasets/reset-baseline', (_req, res) => {
+  projects = JSON.parse(JSON.stringify(BASELINE_PROJECTS));
+  alerts = generateBaselineAlerts(projects);
+  activeRunId = 1;
+  activeDatasetState = null;
+  res.json({ success: true, message: 'All project registers and alerts reset to canonical baseline.' });
+});
+
+// Re-arm or simulate uploaded dataset (for testing undo grace period & confirmation modal)
+app.post('/api/datasets/simulate-upload', (_req, res) => {
+  activeRunId += 1;
+  activeDatasetState = {
+    has_custom_dataset: true,
+    dataset_name: 'MPLADS_Works_Register_Q3_FY24-25.xlsx',
+    files: ['MPLADS_Works_Register_Q3_FY24-25.xlsx', 'Expenditure_Sanctions_Ledger.csv'],
+    uploaded_at: Date.now(),
+    grace_period_seconds: 900,
+    run_id: activeRunId,
+    records_count: 180,
+  };
+  res.json({
+    success: true,
+    message: 'Dataset "MPLADS_Works_Register_Q3_FY24-25.xlsx" loaded. 15-minute undo grace period is now active.',
+    status: activeDatasetState,
   });
 });
 

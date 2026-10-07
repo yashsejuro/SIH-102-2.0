@@ -1805,6 +1805,84 @@ function DashboardPage() {
   const [isExporting, setIsExporting] = useState(false);
   const selectedRunId = new URLSearchParams(location.search).get('run_id');
 
+  // Automatic Jurisdiction Scope Initialization for District & State Roles
+  useEffect(() => {
+    if (user?.role === 'DISTRICT_AUTHORITY') {
+      setSelectedDistrict(user.scope_id || 'Bengaluru Urban');
+      setSelectedState(user.scope_state || 'Karnataka');
+    } else if (user?.role === 'STATE_NODAL_AUTHORITY') {
+      setSelectedState(user.scope_state || user.scope_id || 'Karnataka');
+    }
+  }, [user]);
+
+  // Dataset Undo Grace Period State & Live Countdown
+  const [undoStatus, setUndoStatus] = useState<any>(null);
+  const [undoSeconds, setUndoSeconds] = useState<number>(0);
+  const [isUndoing, setIsUndoing] = useState(false);
+  const [undoToast, setUndoToast] = useState('');
+  const [showUndoConfirmModal, setShowUndoConfirmModal] = useState(false);
+
+  const checkUndo = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/datasets/undo-status`);
+      setUndoStatus(res.data);
+      if (typeof res.data?.seconds_remaining === 'number') {
+        setUndoSeconds(res.data.seconds_remaining);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    checkUndo();
+  }, [selectedRunId]);
+
+  useEffect(() => {
+    if (undoSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setUndoSeconds(s => {
+        if (s <= 1) {
+          clearInterval(timer);
+          checkUndo();
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [undoSeconds]);
+
+  const handleUndoDataset = async () => {
+    setIsUndoing(true);
+    try {
+      const res = await axios.post(`${API_BASE}/api/datasets/undo`);
+      setUndoToast(res.data?.message || 'Dataset reverted successfully.');
+      setShowUndoConfirmModal(false);
+      await checkUndo();
+      fetchDashboardData();
+    } catch (err: any) {
+      setUndoToast(err.response?.data?.error || 'Failed to undo dataset.');
+    } finally {
+      setIsUndoing(false);
+    }
+  };
+
+  const handleArmSimulatedDataset = async () => {
+    try {
+      const res = await axios.post(`${API_BASE}/api/datasets/simulate-upload`);
+      setUndoToast(res.data?.message || 'Sample uploaded dataset active with 15-minute grace period.');
+      await checkUndo();
+      fetchDashboardData();
+    } catch {
+      setUndoToast('Failed to activate sample dataset.');
+    }
+  };
+
+  const formatCountdown = (totalSec: number) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${mins}m ${String(secs).padStart(2, '0')}s`;
+  };
+
   const handleDownloadStateCSV = async () => {
     setIsExporting(true);
     try {
@@ -1929,6 +2007,197 @@ function DashboardPage() {
 
   return (
     <div className="page-stack">
+      {/* Toast Feedback */}
+      {undoToast && (
+        <div className="notice" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ecfdf5', borderColor: '#a7f3d0' }}>
+          <span style={{ color: '#065f46', fontWeight: 600 }}>✓ {undoToast}</span>
+          <button type="button" onClick={() => setUndoToast('')} style={{ background: 'transparent', border: 0, cursor: 'pointer', fontSize: 16 }}>×</button>
+        </div>
+      )}
+
+      {/* Dataset Rollback / Undo Grace Period Banner */}
+      {undoStatus?.has_undoable_dataset && (
+        <div style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 8, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span style={{ fontSize: 26 }}>📁</span>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <strong style={{ color: '#1e40af', fontSize: 13 }}>
+                  Active Uploaded Dataset: {undoStatus.dataset_name}
+                </strong>
+                <span style={{ background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, border: '1px solid #bfdbfe' }}>
+                  ⏱️ {formatCountdown(undoSeconds)} REMAINING
+                </span>
+                <span style={{ background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
+                  15-MIN GRACE PERIOD
+                </span>
+              </div>
+              <span style={{ color: '#2563eb', fontSize: 12, display: 'block', marginTop: 3 }}>
+                Undo grace period is currently active. You can easily remove this dataset to restore the canonical baseline register.
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="button secondary"
+            style={{ color: '#b91c1c', borderColor: '#fca5a5', background: '#ffffff', fontWeight: 700, fontSize: 12, cursor: 'pointer', padding: '8px 16px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+            onClick={() => setShowUndoConfirmModal(true)}
+            disabled={isUndoing}
+          >
+            {isUndoing ? 'Reverting Ingestion...' : 'Remove Dataset (Undo Ingestion)'}
+          </button>
+        </div>
+      )}
+
+      {!undoStatus?.has_undoable_dataset && (
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 22 }}>🏛️</span>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <strong style={{ color: '#1e293b', fontSize: 13 }}>
+                  Active Dataset: Verified Canonical Baseline Register
+                </strong>
+                <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, border: '1px solid #bbf7d0' }}>
+                  ✓ VERIFIED BASELINE (180 PROJECTS)
+                </span>
+              </div>
+              <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginTop: 2 }}>
+                Canonical statutory records loaded. Upload custom registers or ingest test files to audit with a 15-minute undo grace period.
+              </span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              type="button"
+              className="button secondary"
+              style={{ fontSize: 11, padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
+              onClick={handleArmSimulatedDataset}
+              title="Loads a sample dataset to test the 15-minute undo window and removal modal"
+            >
+              ⚡ Ingest Test Dataset (Activate Undo Window)
+            </button>
+            <Link
+              to="/upload"
+              className="button primary"
+              style={{ fontSize: 11, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              + Ingest Custom Files
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Dataset Rollback / Removal Confirmation Modal */}
+      {showUndoConfirmModal && (
+        <div
+          className="modal-backdrop"
+          style={{ zIndex: 9999 }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="undo-dataset-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isUndoing) {
+              setShowUndoConfirmModal(false);
+            }
+          }}
+        >
+          <section
+            className="modal panel"
+            style={{
+              maxWidth: 540,
+              width: '92%',
+              background: '#ffffff',
+              borderRadius: 12,
+              padding: '24px 28px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            <button
+              className="modal-close"
+              onClick={() => setShowUndoConfirmModal(false)}
+              disabled={isUndoing}
+              title="Close modal"
+              style={{ fontSize: 20, cursor: 'pointer', background: 'transparent', border: 0, color: 'var(--muted)' }}
+            >
+              ×
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 26, lineHeight: 1 }}>⚠️</span>
+              <div className="eyebrow" style={{ color: '#b91c1c', fontWeight: 800, letterSpacing: '0.08em' }}>
+                DATASET ROLLBACK CONFIRMATION
+              </div>
+            </div>
+
+            <h2 id="undo-dataset-modal-title" style={{ fontSize: 20, margin: '4px 0 10px', color: 'var(--deep)', fontWeight: 700 }}>
+              Remove Ingested Dataset?
+            </h2>
+
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+              Are you sure you want to remove this dataset during the 15-minute grace period? This action will immediately revert all dashboard metrics, project registers, and anomaly detection results back to the verified baseline data.
+            </p>
+
+            {/* Dataset Details Card */}
+            <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 8, padding: '14px 16px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
+                <span style={{ color: '#991b1b', fontWeight: 600 }}>Target Dataset:</span>
+                <span style={{ color: '#7f1d1d', fontWeight: 700, wordBreak: 'break-all' }}>{undoStatus?.dataset_name || 'Uploaded Register'}</span>
+              </div>
+              {undoStatus?.records_count && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
+                  <span style={{ color: '#991b1b', fontWeight: 600 }}>Records Ingested:</span>
+                  <span style={{ color: '#7f1d1d', fontWeight: 700 }}>{undoStatus.records_count} records</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                <span style={{ color: '#991b1b', fontWeight: 600 }}>Remaining Grace Window:</span>
+                <span style={{ color: '#dc2626', fontWeight: 800, fontFamily: 'monospace', fontSize: 13 }}>
+                  ⏱️ {formatCountdown(undoSeconds)}
+                </span>
+              </div>
+            </div>
+
+            {/* Safety Guarantee Note */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px', marginBottom: 22, fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
+              🛡️ <strong>Safety Guarantee:</strong> Reverting will cleanly restore baseline canonical records. Historical government audits and official sanctions remain completely intact.
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setShowUndoConfirmModal(false)}
+                disabled={isUndoing}
+                style={{ fontWeight: 600, padding: '8px 16px', cursor: 'pointer' }}
+              >
+                Cancel (Keep Dataset)
+              </button>
+              <button
+                type="button"
+                className="button"
+                onClick={handleUndoDataset}
+                disabled={isUndoing}
+                style={{
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  borderColor: '#b91c1c',
+                  fontWeight: 700,
+                  padding: '8px 18px',
+                  cursor: isUndoing ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                {isUndoing ? 'Reverting Ingestion...' : '↺ Yes, Remove Dataset'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* Role-Specific Executive Intelligence Section with Unique Metrics & Gated Actions */}
       {user && (
         <RoleDashboardSection
@@ -2497,10 +2766,14 @@ function exportProjectsCSV(projects: Project[], filename = 'mplads_audit_export.
 }
 
 function RiskPage() { 
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]); 
   const [query, setQuery] = useState(''); 
   const [level, setLevel] = useState(''); 
-  const [state, setState] = useState('');
+  const isDistrictRole = user?.role === 'DISTRICT_AUTHORITY';
+  const districtName = user?.scope_id || 'Bengaluru Urban';
+  const stateName = user?.scope_state || 'Karnataka';
+  const [state, setState] = useState(isDistrictRole ? stateName : '');
   const [states, setStates] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -2508,26 +2781,35 @@ function RiskPage() {
   const [riskCounts, setRiskCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    axios.get(`${API_BASE}/api/dashboard`).then(res => {
+    axios.get(`${API_BASE}/api/dashboard`, { params: { role: user?.role } }).then(res => {
       if (res.data?.state_options) setStates(res.data.state_options);
     }).catch(() => {});
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => { 
+    const queryParams: Record<string, any> = {
+      page,
+      page_size: pageSize,
+      search: query || undefined,
+      risk_level: level || undefined,
+      role: user?.role || undefined,
+    };
+
+    if (isDistrictRole) {
+      queryParams.state = stateName;
+      queryParams.district = districtName;
+    } else {
+      if (state) queryParams.state = state;
+    }
+
     axios.get(`${API_BASE}/api/projects`, {
-      params: {
-        page,
-        page_size: pageSize,
-        search: query || undefined,
-        risk_level: level || undefined,
-        state: state || undefined
-      }
+      params: queryParams
     }).then(response => {
       setProjects(response.data.records || response.data.items || []);
       setTotal(response.data.filtered_count ?? response.data.total_count ?? response.data.total ?? 0);
       setRiskCounts(response.data.risk_counts || {});
     }); 
-  }, [query, level, state, page, pageSize]); 
+  }, [query, level, state, page, pageSize, user?.role, isDistrictRole, districtName, stateName]); 
 
   useEffect(() => setPage(1), [query, level, state, pageSize]);
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -2535,6 +2817,22 @@ function RiskPage() {
   return (
     <div className="page-stack">
       <PageTitle eyebrow="AUDIT TRIAGE WORKSPACE" title="Risk Intelligence" subtitle="Prioritize human review using explainable model and rule signals." />
+
+      {isDistrictRole && (
+        <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>📍</span>
+            <div>
+              <strong style={{ color: '#065f46', fontSize: 13, display: 'block' }}>District Jurisdiction Enforcement Active</strong>
+              <span style={{ color: '#047857', fontSize: 12 }}>Showing works strictly within <b>{districtName}</b> District ({stateName}). All audit risk signals scoped to your jurisdiction.</span>
+            </div>
+          </div>
+          <span style={{ background: '#d1fae5', color: '#065f46', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>
+            SCOPE LOCKED
+          </span>
+        </div>
+      )}
+
       <div className="risk-summary">
         {levels.map(item => (
           <div
@@ -4650,11 +4948,17 @@ function UserManagementPage() {
 }
 
 function ProjectsPage() {
+  const { user } = useAuth();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const [projects, setProjects] = useState<Project[]>([]);
   const [query, setQuery] = useState(params.get('search') || '');
-  const [state, setState] = useState('');
+  const isDistrictRole = user?.role === 'DISTRICT_AUTHORITY';
+  const isStateRole = user?.role === 'STATE_NODAL_AUTHORITY';
+  const districtName = user?.scope_id || 'Bengaluru Urban';
+  const stateName = user?.scope_state || 'Karnataka';
+
+  const [state, setState] = useState(isDistrictRole || isStateRole ? stateName : '');
   const [category, setCategory] = useState('');
   const [level, setLevel] = useState('');
   const [page, setPage] = useState(1);
@@ -4664,45 +4968,89 @@ function ProjectsPage() {
   const categories = ['Roads', 'Water Supply', 'Education', 'Health', 'Sanitation', 'Community Infrastructure', 'Trust and Society', 'Normal/Others', 'Calamity Relief'];
 
   useEffect(() => {
-    axios.get(`${API_BASE}/api/dashboard`).then(res => {
+    axios.get(`${API_BASE}/api/dashboard`, { params: { role: user?.role } }).then(res => {
       if (res.data?.state_options) setStates(res.data.state_options);
     }).catch(() => {});
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => {
+    const queryParams: Record<string, any> = {
+      page,
+      page_size: pageSize,
+      search: query || undefined,
+      category: category || undefined,
+      risk_level: level || undefined,
+      role: user?.role || undefined,
+    };
+
+    if (isDistrictRole) {
+      queryParams.state = stateName;
+      queryParams.district = districtName;
+    } else if (isStateRole) {
+      queryParams.state = state || stateName;
+    } else {
+      if (state) queryParams.state = state;
+    }
+
     axios.get(`${API_BASE}/api/projects`, {
-      params: {
-        page,
-        page_size: pageSize,
-        search: query || undefined,
-        state: state || undefined,
-        category: category || undefined,
-        risk_level: level || undefined
-      }
+      params: queryParams
     }).then(response => {
       setProjects(response.data.records || response.data.items || []);
       setTotal(response.data.filtered_count ?? response.data.total_count ?? response.data.total ?? 0);
     });
-  }, [query, state, category, level, page, pageSize]);
+  }, [query, state, category, level, page, pageSize, user?.role, isDistrictRole, isStateRole, districtName, stateName]);
 
   useEffect(() => setPage(1), [query, state, category, level, pageSize]);
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="page-stack">
-      <PageTitle eyebrow="PROJECT REGISTER" title="Projects" subtitle="Search the complete analyzed register across location, constituency, and category." />
+      <PageTitle
+        eyebrow={isDistrictRole ? `DISTRICT JURISDICTION · ${districtName}` : isStateRole ? `STATE JURISDICTION · ${stateName}` : "PROJECT REGISTER"}
+        title={isDistrictRole ? `${districtName} Works Register` : "Projects"}
+        subtitle={isDistrictRole ? `Showing public works strictly within ${districtName} District (${stateName}).` : "Search the complete analyzed register across location, constituency, and category."}
+      />
+
+      {isDistrictRole && (
+        <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>📍</span>
+            <div>
+              <strong style={{ color: '#065f46', fontSize: 13, display: 'block' }}>District Jurisdiction Enforcement Active</strong>
+              <span style={{ color: '#047857', fontSize: 12 }}>Showing works strictly within <b>{districtName}</b> District ({stateName}). Statutory role restriction applied.</span>
+            </div>
+          </div>
+          <span style={{ background: '#d1fae5', color: '#065f46', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>
+            SCOPE LOCKED
+          </span>
+        </div>
+      )}
+
       <div className="toolbar">
         <div className="table-search">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--muted)', flexShrink: 0, marginRight: 6 }}>
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search project, ID, state, district..." />
+          <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search project, ID, category..." />
         </div>
-        <select value={state} onChange={event => setState(event.target.value)}>
-          <option value="">All states</option>
-          {states.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+
+        {isDistrictRole ? (
+          <>
+            <span style={{ padding: '6px 12px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, fontWeight: 600, color: '#334155' }}>
+              🔒 State: {stateName}
+            </span>
+            <span style={{ padding: '6px 12px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, fontWeight: 600, color: '#334155' }}>
+              🔒 District: {districtName}
+            </span>
+          </>
+        ) : (
+          <select value={state} onChange={event => setState(event.target.value)}>
+            <option value="">All states</option>
+            {states.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
+
         <select value={category} onChange={event => setCategory(event.target.value)}>
           <option value="">All categories</option>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -4716,8 +5064,8 @@ function ProjectsPage() {
           <option value={50}>50 per page</option>
           <option value={100}>100 per page</option>
         </select>
-        {(query || state || category || level) && (
-          <button className="button ghost" onClick={() => { setQuery(''); setState(''); setCategory(''); setLevel(''); }}>
+        {(query || (!isDistrictRole && state) || category || level) && (
+          <button className="button ghost" onClick={() => { setQuery(''); if (!isDistrictRole) setState(''); setCategory(''); setLevel(''); }}>
             Clear filters
           </button>
         )}
