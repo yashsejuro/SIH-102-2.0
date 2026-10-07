@@ -3,26 +3,17 @@ import axios from 'axios';
 
 export const normalizeApiBase = (base?: string) => {
   if (!base) return '';
-  const trimmed = base.trim();
-  const cleaned = trimmed.replace(/\/+$/, '');
+  const trimmed = base.trim().replace(/\/+$/, '');
+  // Discard internal loopback URLs that cannot be resolved in remote browser clients
   if (
-    cleaned === '0.0.0.0' ||
-    cleaned.startsWith('0.0.0.0:') ||
-    cleaned.includes('://0.0.0.0') ||
-    cleaned === 'http://0.0.0.0' ||
-    cleaned === 'https://0.0.0.0' ||
-    cleaned === 'localhost' ||
-    cleaned.startsWith('localhost:') ||
-    cleaned.includes('localhost') ||
-    cleaned === '127.0.0.1' ||
-    cleaned.startsWith('127.0.0.1:') ||
-    cleaned.includes('127.0.0.1') ||
-    cleaned === 'http://127.0.0.1' ||
-    cleaned.includes('8001')
+    trimmed === 'http://0.0.0.0' ||
+    trimmed.startsWith('http://0.0.0.0:') ||
+    trimmed === 'http://127.0.0.1:8001' ||
+    trimmed === 'http://localhost:8001'
   ) {
     return '';
   }
-  return cleaned;
+  return trimmed;
 };
 
 export const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE);
@@ -171,9 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           targetRole === 'MINISTRY'
             ? ['projects:read', 'audit:write', 'dataset:upload', 'analysis:read', 'analysis:manage', 'users:manage', 'audit:integrity', 'security:read', 'security:manage']
             : targetRole === 'STATE_NODAL_AUTHORITY'
-            ? ['projects:read', 'audit:write', 'analysis:read', 'users:manage:lower', 'security:read', 'users:manage']
+            ? ['projects:read', 'audit:write', 'dataset:upload', 'analysis:read', 'users:manage:lower', 'security:read', 'users:manage']
             : targetRole === 'DISTRICT_AUTHORITY'
-            ? ['projects:read', 'audit:write', 'analysis:read', 'security:read']
+            ? ['projects:read', 'audit:write', 'dataset:upload', 'analysis:read', 'security:read']
             : ['projects:read', 'analysis:read'],
       };
 

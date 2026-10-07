@@ -1,0 +1,189 @@
+project_code,project_name,state,district,constituency,agency,project_category,sanction_amount,expenditure,sanction_date,expected_completion_date,actual_completion_date,status,demonstration_pattern
+MPLAD-0001,Health Improvement 001,Gujarat,Ahmedabad,Ahmedabad Parliamentary Constituency,PWD,Health,1673000.0,1395000.0,2024-12-28,2025-09-24,2025-10-01,Completed,NORMAL
+MPLAD-0002,Roads Improvement 002,Assam,Jorhat,Jorhat Parliamentary Constituency,Education Department,Roads,804000.0,694000.0,2023-10-12,2024-06-08,2024-06-23,Completed,NORMAL
+MPLAD-0003,Sanitation Improvement 003,Karnataka,Mysuru,Mysuru Parliamentary Constituency,Urban Development,Sanitation,760000.0,331000.0,2023-11-23,2024-06-20,2024-06-26,Completed,NORMAL
+MPLAD-0004,Water Supply Improvement 004,Bihar,Muzaffarpur,Muzaffarpur Parliamentary Constituency,Rural Development,Water Supply,1664000.0,589000.0,2023-06-17,2024-04-12,2024-04-14,Completed,NORMAL
+MPLAD-0005,Sanitation Improvement 005,Bihar,Patna,Patna Parliamentary Constituency,PWD,Sanitation,600000.0,291000.0,2025-01-30,2025-08-28,2025-09-13,Completed,NORMAL
+MPLAD-0006,Roads Improvement 006,West Bengal,Darjeeling,Darjeeling Parliamentary Constituency,Health Department,Roads,928000.0,548000.0,2024-04-16,2024-12-12,2024-12-25,Completed,NORMAL
+MPLAD-0007,Water Supply Improvement 007,Chhattisgarh,Bilaspur,Bilaspur Parliamentary Constituency,Education Department,Water Supply,1386000.0,550000.0,2023-05-10,2024-03-05,2024-03-06,Completed,NORMAL
+MPLAD-0008,Water Supply Improvement 008,Karnataka,Mysuru,Mysuru Parliamentary Constituency,Education Department,Water Supply,1159000.0,797000.0,2024-05-06,2025-03-02,2025-03-11,Completed,NORMAL
+MPLAD-0009,Roads Improvement 009,Tamil Nadu,Coimbatore,Coimbatore Parliamentary Constituency,Health Department,Roads,1102000.0,808000.0,2025-01-20,2025-09-17,2025-09-18,Completed,NORMAL
+MPLAD-0010,Community Infrastructure Improvement 010,Maharashtra,Nashik,Nashik Parliamentary Constituency,Health Department,Community Infrastructure,1239000.0,662000.0,2023-09-27,2024-11-20,2024-11-26,Completed,NORMAL
+MPLAD-0011,Roads Improvement 011,Karnataka,Mysuru,Mysuru Parliamentary Constituency,PWD,Roads,723000.0,428000.0,2024-04-09,2024-12-05,2024-12-11,Completed,NORMAL
+MPLAD-0012,Roads Improvement 012,West Bengal,Howrah,Howrah Parliamentary Constituency,Urban Development,Roads,1061000.0,814000.0,2024-09-23,2025-05-21,2025-05-24,Completed,NORMAL
+MPLAD-0013,Sanitation Improvement 013,Odisha,Ganjam,Ganjam Parliamentary Constituency,Rural Development,Sanitation,921000.0,620000.0,2024-01-29,2024-08-26,2024-09-13,Completed,NORMAL
+MPLAD-0014,Roads Improvement 014,Haryana,Karnal,Karnal Parliamentary Constituency,Rural Development,Roads,988000.0,371000.0,2023-06-23,2024-02-18,2024-02-19,Completed,NORMAL
+MPLAD-0015,Community Infrastructure Improvement 015,Karnataka,Bengaluru Urban,Bengaluru Urban Parliamentary Constituency,Rural Development,Community Infrastructure,813000.0,683000.0,2023-11-11,2025-01-04,2025-01-20,Completed,NORMAL
+MPLAD-0016,Roads Improvement 016,Gujarat,Ahmedabad,Ahmedabad Parliamentary Constituency,Health Department,Roads,1089000.0,449000.0,2023-11-13,2024-07-10,2024-07-27,Completed,NORMAL
+MPLAD-0017,Roads Improvement 017,Chhattisgarh,Durg,Durg Parliamentary Constituency,Water Resources,Roads,641000.0,566000.0,2024-08-19,2025-04-16,2025-04-22,Completed,NORMAL
+MPLAD-0018,Community Infrastructure Improvement 018,Chhattisgarh,Bilaspur,Bilaspur Parliamentary Constituency,Rural Development,Community Infrastructure,870000.0,531000.0,2025-02-14,2026-04-10,2026-04-29,Completed,NORMAL
+MPLAD-0019,Water Supply Improvement 019,West Bengal,Howrah,Howrah Parliamentary Constituency,Water Resources,Water Supply,1568000.0,954000.0,2023-03-16,2024-01-10,2024-01-28,Completed,NORMAL
+MPLAD-0020,Water Supply Improvement 020,Chhattisgarh,Bilaspur,Bilaspur Parliamentary Constituency,Education Department,Water Supply,1210000.0,748000.0,2023-06-30,2024-04-25,2024-04-30,Completed,NORMAL
+MPLAD-0021,Roads Improvement 021,Bihar,Muzaffarpur,Muzaffarpur Parliamentary Constituency,Urban Development,Roads,694000.0,304000.0,2023-08-21,2024-04-17,2024-05-01,Completed,NORMAL
+MPLAD-0022,Education Improvement 022,Haryana,Hisar,Hisar Parliamentary Constituency,Health Department,Education,1228000.0,1006000.0,2023-10-23,2024-10-17,2024-10-26,Completed,NORMAL
+MPLAD-0023,Health Improvement 023,Assam,Jorhat,Jorhat Parliamentary Constituency,Health Department,Health,1593000.0,1137000.0,2024-06-27,2025-03-24,2025-04-06,Completed,NORMAL
+MPLAD-0024,Community Infrastructure Improvement 024,Haryana,Hisar,Hisar Parliamentary Constituency,Education Department,Community Infrastructure,1490000.0,739000.0,2023-08-25,2024-10-18,2024-10-21,Completed,NORMAL
+MPLAD-0025,Health Improvement 025,Haryana,Karnal,Karnal Parliamentary Constituency,Health Department,Health,1124000.0,761000.0,2024-02-21,2024-11-17,2024-11-23,Completed,NORMAL
+MPLAD-0026,Community Infrastructure Improvement 026,Uttar Pradesh,Varanasi,Varanasi Parliamentary Constituency,Water Resources,Community Infrastructure,1437000.0,606000.0,2024-04-06,2025-05-31,2025-06-07,Completed,NORMAL
+MPLAD-0027,Roads Improvement 027,Andhra Pradesh,Guntur,Guntur Parliamentary Constituency,Education Department,Roads,1191000.0,819000.0,2024-05-18,2025-01-13,2025-01-26,Completed,NORMAL
+MPLAD-0028,Sanitation Improvement 028,Odisha,Ganjam,Ganjam Parliamentary Constituency,Rural Development,Sanitation,800000.0,286000.0,2024-09-28,2025-04-26,2025-05-11,Completed,NORMAL
+MPLAD-0029,Education Improvement 029,Assam,Jorhat,Jorhat Parliamentary Constituency,Urban Development,Education,1368000.0,1054000.0,2024-01-01,2024-12-26,2025-01-14,Completed,NORMAL
+MPLAD-0030,Sanitation Improvement 030,Bihar,Muzaffarpur,Muzaffarpur Parliamentary Constituency,Health Department,Sanitation,827000.0,630000.0,2023-12-10,2024-07-07,2024-07-23,Completed,NORMAL
+MPLAD-0031,Roads Improvement 031,Bihar,Gaya,Gaya Parliamentary Constituency,Water Resources,Roads,1068000.0,737000.0,2023-11-19,2024-07-16,2024-07-26,Completed,NORMAL
+MPLAD-0032,Community Infrastructure Improvement 032,Bihar,Gaya,Gaya Parliamentary Constituency,Urban Development,Community Infrastructure,1268000.0,536000.0,2025-01-22,2026-03-18,2026-04-02,Completed,NORMAL
+MPLAD-0033,Water Supply Improvement 033,Madhya Pradesh,Jabalpur,Jabalpur Parliamentary Constituency,Urban Development,Water Supply,1416000.0,1251000.0,2024-02-25,2024-12-21,2025-01-03,Completed,NORMAL
+MPLAD-0034,Water Supply Improvement 034,Madhya Pradesh,Jabalpur,Jabalpur Parliamentary Constituency,Education Department,Water Supply,1969000.0,1497000.0,2025-03-03,2025-12-28,2026-01-03,Completed,NORMAL
+MPLAD-0035,Sanitation Improvement 035,West Bengal,Howrah,Howrah Parliamentary Constituency,Health Department,Sanitation,888000.0,675000.0,2023-03-30,2023-10-26,2023-10-31,Completed,NORMAL
+MPLAD-0036,Health Improvement 036,Haryana,Karnal,Karnal Parliamentary Constituency,PWD,Health,1769000.0,952000.0,2023-06-13,2024-03-09,2024-03-25,Completed,NORMAL
+MPLAD-0037,Roads Improvement 037,West Bengal,Howrah,Howrah Parliamentary Constituency,Urban Development,Roads,881000.0,753000.0,2023-09-04,2024-05-01,2024-05-12,Completed,NORMAL
+MPLAD-0038,Water Supply Improvement 038,Tamil Nadu,Coimbatore,Coimbatore Parliamentary Constituency,Urban Development,Water Supply,2150000.0,1771000.0,2023-10-17,2024-08-12,2024-08-30,Completed,NORMAL
+MPLAD-0039,Education Improvement 039,Rajasthan,Jaipur,Jaipur Parliamentary Constituency,PWD,Education,1144000.0,674000.0,2023-11-02,2024-10-27,2024-11-09,Completed,NORMAL
+MPLAD-0040,Community Infrastructure Improvement 040,Uttar Pradesh,Varanasi,Varanasi Parliamentary Constituency,Health Department,Community Infrastructure,1589000.0,1196000.0,2023-07-10,2024-09-02,2024-09-16,Completed,NORMAL
+MPLAD-0041,Roads Improvement 041,Haryana,Karnal,Karnal Parliamentary Constituency,Health Department,Roads,1101000.0,858000.0,2023-05-09,2024-01-04,2024-01-04,Completed,NORMAL
+MPLAD-0042,Water Supply Improvement 042,Rajasthan,Jaipur,Jaipur Parliamentary Constituency,PWD,Water Supply,1157000.0,1007000.0,2025-02-13,2025-12-10,2025-12-25,Completed,NORMAL
+MPLAD-0043,Education Improvement 043,Jharkhand,East Singhbhum,East Singhbhum Parliamentary Constituency,Education Department,Education,848000.0,400000.0,2023-03-22,2024-03-16,2024-04-01,Completed,NORMAL
+MPLAD-0044,Community Infrastructure Improvement 044,Bihar,Muzaffarpur,Muzaffarpur Parliamentary Constituency,Health Department,Community Infrastructure,1349000.0,781000.0,2023-06-10,2024-08-03,2024-08-07,Completed,NORMAL
+MPLAD-0045,Health Improvement 045,Uttar Pradesh,Varanasi,Varanasi Parliamentary Constituency,Education Department,Health,1985000.0,1566000.0,2023-11-06,2024-08-02,2024-08-02,Completed,NORMAL
+MPLAD-0046,Sanitation Improvement 046,Haryana,Karnal,Karnal Parliamentary Constituency,Education Department,Sanitation,755000.0,329000.0,2024-07-08,2025-02-03,2025-02-05,Completed,NORMAL
+MPLAD-0047,Community Infrastructure Improvement 047,Telangana,Nizamabad,Nizamabad Parliamentary Constituency,Education Department,Community Infrastructure,848000.0,482000.0,2023-08-20,2024-10-13,2024-10-17,Completed,NORMAL
+MPLAD-0048,Sanitation Improvement 048,Gujarat,Surat,Surat Parliamentary Constituency,Education Department,Sanitation,597000.0,464000.0,2024-12-19,2025-07-17,2025-07-20,Completed,NORMAL
+MPLAD-0049,Health Improvement 049,Maharashtra,Nagpur,Nagpur Parliamentary Constituency,Water Resources,Health,2085000.0,973000.0,2025-02-05,2025-11-02,2025-11-22,Completed,NORMAL
+MPLAD-0050,Community Infrastructure Improvement 050,Uttar Pradesh,Prayagraj,Prayagraj Parliamentary Constituency,Rural Development,Community Infrastructure,1543000.0,600000.0,2023-01-26,2024-03-21,2024-04-02,Completed,NORMAL
+MPLAD-0051,Health Improvement 051,Uttar Pradesh,Prayagraj,Prayagraj Parliamentary Constituency,PWD,Health,1219000.0,815000.0,2024-03-10,2024-12-05,2024-12-09,Completed,NORMAL
+MPLAD-0052,Community Infrastructure Improvement 052,Andhra Pradesh,Guntur,Guntur Parliamentary Constituency,Rural Development,Community Infrastructure,1426000.0,1222000.0,2024-11-21,2026-01-15,2026-01-15,Completed,NORMAL
+MPLAD-0053,Sanitation Improvement 053,Telangana,Warangal,Warangal Parliamentary Constituency,Urban Development,Sanitation,962000.0,364000.0,2024-03-18,2024-10-14,2024-10-28,Completed,NORMAL
+MPLAD-0054,Sanitation Improvement 054,Gujarat,Surat,Surat Parliamentary Constituency,Education Department,Sanitation,537000.0,459000.0,2024-03-19,2024-10-15,2024-10-28,Completed,NORMAL
+MPLAD-0055,Water Supply Improvement 055,Tamil Nadu,Madurai,Madurai Parliamentary Constituency,Education Department,Water Supply,1139000.0,550000.0,2023-05-23,2024-03-18,2024-03-26,Completed,NORMAL
+MPLAD-0056,Water Supply Improvement 056,Odisha,Ganjam,Ganjam Parliamentary Constituency,Water Resources,Water Supply,2069000.0,1572000.0,2024-03-03,2024-12-28,2024-12-30,Completed,NORMAL
+MPLAD-0057,Health Improvement 057,Karnataka,Bengaluru Urban,Bengaluru Urban Parliamentary Constituency,PWD,Health,1234000.0,622000.0,2024-05-25,2025-02-19,2025-03-06,Completed,NORMAL
+MPLAD-0058,Water Supply Improvement 058,Andhra Pradesh,Krishna,Krishna Parliamentary Constituency,Education Department,Water Supply,1739000.0,1290000.0,2024-09-29,2025-07-26,2025-07-30,Completed,NORMAL
+MPLAD-0059,Sanitation Improvement 059,Odisha,Cuttack,Cuttack Parliamentary Constituency,Health Department,Sanitation,831000.0,520000.0,2024-06-25,2025-01-21,2025-01-26,Completed,NORMAL
+MPLAD-0060,Education Improvement 060,Madhya Pradesh,Bhopal,Bhopal Parliamentary Constituency,Education Department,Education,1553000.0,1205000.0,2023-04-17,2024-04-11,2024-04-19,Completed,NORMAL
+MPLAD-0061,Education Improvement 061,Gujarat,Vadodara,Vadodara Parliamentary Constituency,PWD,Education,1226000.0,496000.0,2024-09-28,2025-09-23,2025-09-30,Completed,NORMAL
+MPLAD-0062,Education Improvement 062,Odisha,Cuttack,Cuttack Parliamentary Constituency,PWD,Education,828000.0,350000.0,2023-06-13,2024-06-07,2024-06-27,Completed,NORMAL
+MPLAD-0063,Water Supply Improvement 063,Tamil Nadu,Madurai,Madurai Parliamentary Constituency,Health Department,Water Supply,1267000.0,450000.0,2024-07-09,2025-05-05,2025-05-06,Completed,NORMAL
+MPLAD-0064,Sanitation Improvement 064,Telangana,Hyderabad,Hyderabad Parliamentary Constituency,Urban Development,Sanitation,698000.0,328000.0,2024-10-19,2025-05-17,2025-05-31,Completed,NORMAL
+MPLAD-0065,Water Supply Improvement 065,Rajasthan,Jaipur,Jaipur Parliamentary Constituency,Education Department,Water Supply,2143000.0,922000.0,2024-11-05,2025-09-01,2025-09-09,Completed,NORMAL
+MPLAD-0066,Health Improvement 066,Haryana,Gurugram,Gurugram Parliamentary Constituency,Rural Development,Health,1171000.0,706000.0,2024-07-07,2025-04-03,2025-04-09,Completed,NORMAL
+MPLAD-0067,Water Supply Improvement 067,Rajasthan,Udaipur,Udaipur Parliamentary Constituency,Health Department,Water Supply,1059000.0,730000.0,2025-01-30,2025-11-26,2025-11-26,Completed,NORMAL
+MPLAD-0068,Roads Improvement 068,Assam,Dibrugarh,Dibrugarh Parliamentary Constituency,Education Department,Roads,1154000.0,735000.0,2025-01-29,2025-09-26,2025-09-28,Completed,NORMAL
+MPLAD-0069,Roads Improvement 069,Tamil Nadu,Madurai,Madurai Parliamentary Constituency,PWD,Roads,942000.0,754000.0,2023-06-19,2024-02-14,2024-02-17,Completed,NORMAL
+MPLAD-0070,Health Improvement 070,Gujarat,Surat,Surat Parliamentary Constituency,PWD,Health,1267000.0,540000.0,2024-07-27,2025-04-23,2025-05-10,Completed,NORMAL
+MPLAD-0071,Water Supply Improvement 071,West Bengal,Howrah,Howrah Parliamentary Constituency,Education Department,Water Supply,1120000.0,956000.0,2023-11-12,2024-09-07,2024-09-20,Completed,NORMAL
+MPLAD-0072,Water Supply Improvement 072,Tamil Nadu,Coimbatore,Coimbatore Parliamentary Constituency,Water Resources,Water Supply,1276000.0,1122000.0,2023-08-21,2024-06-16,2024-06-29,Completed,NORMAL
+MPLAD-0073,Sanitation Improvement 073,Telangana,Nizamabad,Nizamabad Parliamentary Constituency,Education Department,Sanitation,908000.0,376000.0,2023-12-30,2024-07-27,2024-08-14,Completed,NORMAL
+MPLAD-0074,Health Improvement 074,Chhattisgarh,Bilaspur,Bilaspur Parliamentary Constituency,Urban Development,Health,1854000.0,1633000.0,2024-09-22,2025-06-19,2025-06-21,Completed,NORMAL
+MPLAD-0075,Education Improvement 075,West Bengal,Kolkata,Kolkata Parliamentary Constituency,Rural Development,Education,1724000.0,612000.0,2023-11-02,2024-10-27,2024-10-30,Completed,NORMAL
+MPLAD-0076,Water Supply Improvement 076,Andhra Pradesh,Visakhapatnam,Visakhapatnam Parliamentary Constituency,Rural Development,Water Supply,1232000.0,1002000.0,2023-06-24,2024-04-19,2024-05-04,Completed,NORMAL
+MPLAD-0077,Sanitation Improvement 077,Bihar,Gaya,Gaya Parliamentary Constituency,PWD,Sanitation,831000.0,646000.0,2023-10-10,2024-05-07,2024-05-09,Completed,NORMAL
+MPLAD-0078,Sanitation Improvement 078,Chhattisgarh,Bilaspur,Bilaspur Parliamentary Constituency,Health Department,Sanitation,591000.0,418000.0,2023-03-25,2023-10-21,2023-10-28,Completed,NORMAL
+MPLAD-0079,Sanitation Improvement 079,West Bengal,Darjeeling,Darjeeling Parliamentary Constituency,PWD,Sanitation,460000.0,292000.0,2024-04-26,2024-11-22,2024-12-01,Completed,NORMAL
+MPLAD-0080,Community Infrastructure Improvement 080,Bihar,Patna,Patna Parliamentary Constituency,Rural Development,Community Infrastructure,1502000.0,806000.0,2024-07-04,2025-08-28,2025-09-01,Completed,NORMAL
+MPLAD-0081,Health Improvement 081,Gujarat,Surat,Surat Parliamentary Constituency,Urban Development,Health,1729000.0,1041000.0,2025-01-11,2025-10-08,2025-10-10,Completed,NORMAL
+MPLAD-0082,Community Infrastructure Improvement 082,West Bengal,Darjeeling,Darjeeling Parliamentary Constituency,Urban Development,Community Infrastructure,1257000.0,1072000.0,2024-03-13,2025-05-07,2025-05-17,Completed,NORMAL
+MPLAD-0083,Education Improvement 083,Gujarat,Surat,Surat Parliamentary Constituency,Education Department,Education,1205000.0,484000.0,2025-01-09,2026-01-04,2026-01-19,Completed,NORMAL
+MPLAD-0084,Health Improvement 084,Rajasthan,Jodhpur,Jodhpur Parliamentary Constituency,Rural Development,Health,1310000.0,1014000.0,2025-02-10,2025-11-07,2025-11-08,Completed,NORMAL
+MPLAD-0085,Education Improvement 085,West Bengal,Kolkata,Kolkata Parliamentary Constituency,Water Resources,Education,1207000.0,685000.0,2024-12-04,2025-11-29,2025-12-12,Completed,NORMAL
+MPLAD-0086,Health Improvement 086,Tamil Nadu,Madurai,Madurai Parliamentary Constituency,Urban Development,Health,1588000.0,1252000.0,2023-01-26,2023-10-23,2023-11-11,Completed,NORMAL
+MPLAD-0087,Water Supply Improvement 087,Tamil Nadu,Coimbatore,Coimbatore Parliamentary Constituency,Education Department,Water Supply,1423000.0,1014000.0,2024-11-17,2025-09-13,2025-09-19,Completed,NORMAL
+MPLAD-0088,Education Improvement 088,Jharkhand,East Singhbhum,East Singhbhum Parliamentary Constituency,Urban Development,Education,1802000.0,1383000.0,2024-06-22,2025-06-17,2025-06-25,Completed,NORMAL
+MPLAD-0089,Education Improvement 089,Jharkhand,East Singhbhum,East Singhbhum Parliamentary Constituency,Rural Development,Education,1143000.0,972000.0,2023-07-12,2024-07-06,2024-07-25,Completed,NORMAL
+MPLAD-0090,Health Improvement 090,Telangana,Nizamabad,Nizamabad Parliamentary Constituency,Health Department,Health,1209000.0,789000.0,2024-04-12,2025-01-07,2025-01-17,Completed,NORMAL
+MPLAD-0091,Health Improvement 091,Andhra Pradesh,Visakhapatnam,Visakhapatnam Parliamentary Constituency,PWD,Health,1234000.0,796000.0,2024-12-21,2025-09-17,2025-10-02,Completed,NORMAL
+MPLAD-0092,Education Improvement 092,Uttar Pradesh,Lucknow,Lucknow Parliamentary Constituency,Education Department,Education,1229000.0,852000.0,2024-05-10,2025-05-05,2025-05-23,Completed,NORMAL
+MPLAD-0093,Roads Improvement 093,Bihar,Patna,Patna Parliamentary Constituency,Education Department,Roads,987000.0,517000.0,2023-01-20,2023-09-17,2023-10-04,Completed,NORMAL
+MPLAD-0094,Health Improvement 094,Bihar,Gaya,Gaya Parliamentary Constituency,Health Department,Health,1090000.0,763000.0,2023-10-13,2024-07-09,2024-07-25,Completed,NORMAL
+MPLAD-0095,Health Improvement 095,Karnataka,Bengaluru Urban,Bengaluru Urban Parliamentary Constituency,PWD,Health,1848000.0,1258000.0,2024-10-14,2025-07-11,2025-07-30,Completed,NORMAL
+MPLAD-0096,Water Supply Improvement 096,Uttar Pradesh,Prayagraj,Prayagraj Parliamentary Constituency,Education Department,Water Supply,1145000.0,895000.0,2024-01-23,2024-11-18,2024-11-28,Completed,NORMAL
+MPLAD-0097,Education Improvement 097,Karnataka,Bengaluru Urban,Bengaluru Urban Parliamentary Constituency,Education Department,Education,1161000.0,465000.0,2024-10-26,2025-10-21,2025-11-09,Completed,NORMAL
+MPLAD-0098,Water Supply Improvement 098,Chhattisgarh,Bilaspur,Bilaspur Parliamentary Constituency,Rural Development,Water Supply,1705000.0,712000.0,2023-02-08,2023-12-05,2023-12-13,Completed,NORMAL
+MPLAD-0099,Sanitation Improvement 099,Andhra Pradesh,Guntur,Guntur Parliamentary Constituency,PWD,Sanitation,486000.0,401000.0,2023-09-02,2024-03-30,2024-04-17,Completed,NORMAL
+MPLAD-0100,Education Improvement 100,Rajasthan,Jaipur,Jaipur Parliamentary Constituency,Health Department,Education,902000.0,595000.0,2023-11-20,2024-11-14,2024-11-18,Completed,NORMAL
+MPLAD-0101,Sanitation Improvement 101,Tamil Nadu,Madurai,Madurai Parliamentary Constituency,Water Resources,Sanitation,852000.0,315000.0,2023-08-30,2024-03-27,2024-04-05,Completed,NORMAL
+MPLAD-0102,Water Supply Improvement 102,Maharashtra,Nashik,Nashik Parliamentary Constituency,Health Department,Water Supply,2160000.0,1699000.0,2025-01-12,2025-11-08,2025-11-28,Completed,NORMAL
+MPLAD-0103,Roads Improvement 103,Gujarat,Vadodara,Vadodara Parliamentary Constituency,Education Department,Roads,1169000.0,913000.0,2023-11-05,2024-07-02,2024-07-22,Completed,NORMAL
+MPLAD-0104,Roads Improvement 104,Telangana,Nizamabad,Nizamabad Parliamentary Constituency,Education Department,Roads,1124000.0,611000.0,2024-02-26,2024-10-23,2024-10-29,Completed,NORMAL
+MPLAD-0105,Health Improvement 105,Maharashtra,Nagpur,Nagpur Parliamentary Constituency,Education Department,Health,1098000.0,663000.0,2025-02-04,2025-11-01,2025-11-09,Completed,NORMAL
+MPLAD-0106,Sanitation Improvement 106,Gujarat,Vadodara,Vadodara Parliamentary Constituency,Education Department,Sanitation,885000.0,638000.0,2024-11-05,2025-06-03,2025-06-13,Completed,NORMAL
+MPLAD-0107,Health Improvement 107,Bihar,Patna,Patna Parliamentary Constituency,PWD,Health,1357000.0,900000.0,2024-03-13,2024-12-08,2024-12-12,Completed,NORMAL
+MPLAD-0108,Sanitation Improvement 108,Odisha,Puri,Puri Parliamentary Constituency,Rural Development,Sanitation,692000.0,384000.0,2024-06-07,2025-01-03,2025-01-16,Completed,NORMAL
+MPLAD-0109,Sanitation Improvement 109,Rajasthan,Udaipur,Udaipur Parliamentary Constituency,Urban Development,Sanitation,981000.0,733000.0,2023-08-06,2024-03-03,2024-03-22,Completed,NORMAL
+MPLAD-0110,Roads Improvement 110,Haryana,Karnal,Karnal Parliamentary Constituency,Urban Development,Roads,1042000.0,539000.0,2024-12-28,2025-08-25,2025-08-29,Completed,NORMAL
+MPLAD-0111,Community Infrastructure Improvement 111,Karnataka,Bengaluru Urban,Bengaluru Urban Parliamentary Constituency,Urban Development,Community Infrastructure,1268000.0,1078000.0,2024-12-29,2026-02-22,2026-03-06,Completed,NORMAL
+MPLAD-0112,Education Improvement 112,Bihar,Patna,Patna Parliamentary Constituency,Water Resources,Education,1431000.0,508000.0,2023-01-23,2024-01-18,2024-01-28,Completed,NORMAL
+MPLAD-0113,Education Improvement 113,Haryana,Karnal,Karnal Parliamentary Constituency,Water Resources,Education,1114000.0,532000.0,2024-03-20,2025-03-15,2025-03-31,Completed,NORMAL
+MPLAD-0114,Education Improvement 114,Andhra Pradesh,Visakhapatnam,Visakhapatnam Parliamentary Constituency,Health Department,Education,1030000.0,652000.0,2023-02-24,2024-02-19,2024-02-22,Completed,NORMAL
+MPLAD-0115,Community Infrastructure Improvement 115,Odisha,Ganjam,Ganjam Parliamentary Constituency,Urban Development,Community Infrastructure,1320000.0,824000.0,2023-11-07,2024-12-31,2025-01-02,Completed,NORMAL
+MPLAD-0116,Health Improvement 116,Telangana,Hyderabad,Hyderabad Parliamentary Constituency,Education Department,Health,1480000.0,1143000.0,2023-04-01,2023-12-27,2024-01-13,Completed,NORMAL
+MPLAD-0117,Water Supply Improvement 117,Rajasthan,Jaipur,Jaipur Parliamentary Constituency,Education Department,Water Supply,1575000.0,1323000.0,2025-02-10,2025-12-07,2025-12-15,Completed,NORMAL
+MPLAD-0118,Community Infrastructure Improvement 118,Maharashtra,Nashik,Nashik Parliamentary Constituency,Urban Development,Community Infrastructure,1219000.0,494000.0,2024-03-22,2025-05-16,2025-06-04,Completed,NORMAL
+MPLAD-0119,Water Supply Improvement 119,Chhattisgarh,Raipur,Raipur Parliamentary Constituency,Water Resources,Water Supply,1484000.0,1038000.0,2024-08-16,2025-06-12,2025-06-12,Completed,NORMAL
+MPLAD-0120,Health Improvement 120,Bihar,Muzaffarpur,Muzaffarpur Parliamentary Constituency,Education Department,Health,1071000.0,663000.0,2024-12-07,2025-09-03,2025-09-09,Completed,NORMAL
+MPLAD-0121,Health Improvement 121,Andhra Pradesh,Krishna,Krishna Parliamentary Constituency,PWD,Health,1691000.0,774000.0,2024-10-09,2025-07-06,2025-07-14,Completed,NORMAL
+MPLAD-0122,Community Infrastructure Improvement 122,Chhattisgarh,Raipur,Raipur Parliamentary Constituency,Health Department,Community Infrastructure,1356000.0,827000.0,2023-05-08,2024-07-01,2024-07-10,Completed,NORMAL
+MPLAD-0123,Community Infrastructure Improvement 123,Andhra Pradesh,Visakhapatnam,Visakhapatnam Parliamentary Constituency,Urban Development,Community Infrastructure,1426000.0,512000.0,2023-03-02,2024-04-25,2024-05-09,Completed,NORMAL
+MPLAD-0124,Education Improvement 124,Assam,Kamrup,Kamrup Parliamentary Constituency,Water Resources,Education,1630000.0,1035000.0,2024-09-05,2025-08-31,2025-09-13,Completed,NORMAL
+MPLAD-0125,Community Infrastructure Improvement 125,Gujarat,Ahmedabad,Ahmedabad Parliamentary Constituency,Health Department,Community Infrastructure,1327000.0,984000.0,2023-03-02,2024-04-25,2024-12-29,Delayed,DELAY
+MPLAD-0126,Health Improvement 126,Jharkhand,East Singhbhum,East Singhbhum Parliamentary Constituency,Rural Development,Health,1746000.0,1246000.0,2023-10-31,2024-07-27,2025-06-03,Delayed,DELAY
+MPLAD-0127,Roads Improvement 127,Karnataka,Bengaluru Urban,Bengaluru Urban Parliamentary Constituency,PWD,Roads,1161000.0,802000.0,2025-01-25,2025-09-22,2026-07-11,Delayed,DELAY
+MPLAD-0128,Roads Improvement 128,Andhra Pradesh,Guntur,Guntur Parliamentary Constituency,Water Resources,Roads,789000.0,367000.0,2024-06-28,2025-02-23,2025-08-01,Delayed,DELAY
+MPLAD-0129,Community Infrastructure Improvement 129,Bihar,Muzaffarpur,Muzaffarpur Parliamentary Constituency,Rural Development,Community Infrastructure,764000.0,307000.0,2023-05-12,2024-07-05,2025-02-04,Delayed,DELAY
+MPLAD-0130,Water Supply Improvement 130,Uttar Pradesh,Prayagraj,Prayagraj Parliamentary Constituency,Urban Development,Water Supply,1357000.0,700000.0,2023-09-14,2024-07-10,2025-03-08,Delayed,DELAY
+MPLAD-0131,Water Supply Improvement 131,Tamil Nadu,Chennai,Chennai Parliamentary Constituency,Health Department,Water Supply,2175000.0,1305000.0,2024-04-08,2025-02-02,2025-12-04,Delayed,DELAY
+MPLAD-0132,Community Infrastructure Improvement 132,Maharashtra,Nagpur,Nagpur Parliamentary Constituency,Rural Development,Community Infrastructure,1298000.0,1039000.0,2023-11-18,2025-01-11,2025-11-02,Delayed,DELAY
+MPLAD-0133,Water Supply Improvement 133,Andhra Pradesh,Visakhapatnam,Visakhapatnam Parliamentary Constituency,Urban Development,Water Supply,1954000.0,1044000.0,2025-01-09,2025-11-05,2026-08-15,Delayed,DELAY
+MPLAD-0134,Education Improvement 134,Madhya Pradesh,Jabalpur,Jabalpur Parliamentary Constituency,Education Department,Education,1499000.0,541000.0,2023-01-02,2023-12-28,2024-06-20,Delayed,DELAY
+MPLAD-0135,Water Supply Improvement 135,Tamil Nadu,Madurai,Madurai Parliamentary Constituency,Rural Development,Water Supply,2224000.0,1226000.0,2024-10-23,2025-08-19,2026-04-03,Delayed,DELAY
+MPLAD-0136,Sanitation Improvement 136,Madhya Pradesh,Jabalpur,Jabalpur Parliamentary Constituency,PWD,Sanitation,718000.0,585000.0,2025-01-29,2025-08-27,2026-03-04,Delayed,DELAY
+MPLAD-0137,Sanitation Improvement 137,Uttar Pradesh,Prayagraj,Prayagraj Parliamentary Constituency,Education Department,Sanitation,871000.0,510000.0,2023-07-16,2024-02-11,2024-07-04,Delayed,DELAY
+MPLAD-0138,Education Improvement 138,Andhra Pradesh,Krishna,Krishna Parliamentary Constituency,Education Department,Education,995000.0,351000.0,2024-01-28,2025-01-22,2025-10-19,Delayed,DELAY
+MPLAD-0139,Education Improvement 139,Jharkhand,Ranchi,Ranchi Parliamentary Constituency,PWD,Education,1044000.0,465000.0,2023-05-29,2024-05-23,2025-02-10,Delayed,DELAY
+MPLAD-0140,Water Supply Improvement 140,Odisha,Cuttack,Cuttack Parliamentary Constituency,Education Department,Water Supply,1948000.0,1145000.0,2024-06-12,2025-04-08,2025-12-26,Delayed,DELAY
+MPLAD-0141,Roads Improvement 141,Tamil Nadu,Madurai,Madurai Parliamentary Constituency,PWD,Roads,3784000.0,2611000.0,2023-01-19,2023-09-16,2023-09-28,Completed,COST_ANOMALY
+MPLAD-0142,Roads Improvement 142,Assam,Jorhat,Jorhat Parliamentary Constituency,Health Department,Roads,4094000.0,2035000.0,2024-10-20,2025-06-17,2025-07-03,Completed,COST_ANOMALY
+MPLAD-0143,Education Improvement 143,Rajasthan,Jodhpur,Jodhpur Parliamentary Constituency,Rural Development,Education,6387000.0,3054000.0,2023-11-09,2024-11-03,2024-11-16,Completed,COST_ANOMALY
+MPLAD-0144,Sanitation Improvement 144,Bihar,Gaya,Gaya Parliamentary Constituency,Education Department,Sanitation,3085000.0,2183000.0,2023-06-24,2024-01-20,2024-01-28,Completed,COST_ANOMALY
+MPLAD-0145,Community Infrastructure Improvement 145,Rajasthan,Udaipur,Udaipur Parliamentary Constituency,Rural Development,Community Infrastructure,5414000.0,3296000.0,2023-03-19,2024-05-12,2024-05-20,Completed,COST_ANOMALY
+MPLAD-0146,Education Improvement 146,Chhattisgarh,Bilaspur,Bilaspur Parliamentary Constituency,Rural Development,Education,6812000.0,4444000.0,2024-01-08,2025-01-02,2025-01-02,Completed,COST_ANOMALY
+MPLAD-0147,Community Infrastructure Improvement 147,Rajasthan,Udaipur,Udaipur Parliamentary Constituency,Water Resources,Community Infrastructure,4907000.0,3769000.0,2023-03-13,2024-05-06,2024-05-14,Completed,COST_ANOMALY
+MPLAD-0148,Health Improvement 148,Jharkhand,Ranchi,Ranchi Parliamentary Constituency,PWD,Health,5461000.0,4377000.0,2024-11-25,2025-08-22,2025-09-10,Completed,COST_ANOMALY
+MPLAD-0149,Community Infrastructure Improvement 149,Karnataka,Bengaluru Urban,Bengaluru Urban Parliamentary Constituency,Rural Development,Community Infrastructure,4724000.0,2925000.0,2023-09-21,2024-11-14,2024-11-14,Completed,COST_ANOMALY
+MPLAD-0150,Health Improvement 150,Maharashtra,Nagpur,Nagpur Parliamentary Constituency,Water Resources,Health,6968000.0,5184000.0,2024-12-27,2025-09-23,2025-10-11,Completed,COST_ANOMALY
+MPLAD-0151,Roads Improvement 151,Gujarat,Ahmedabad,Ahmedabad Parliamentary Constituency,Water Resources,Roads,3574000.0,2050000.0,2023-05-14,2024-01-09,2024-01-19,Completed,COST_ANOMALY
+MPLAD-0152,Water Supply Improvement 152,Odisha,Cuttack,Cuttack Parliamentary Constituency,Urban Development,Water Supply,7765000.0,6346000.0,2023-02-17,2023-12-14,2024-01-02,Completed,COST_ANOMALY
+MPLAD-0153,Education Improvement 153,West Bengal,Kolkata,Kolkata Parliamentary Constituency,Health Department,Education,1218000.0,1376000.0,2023-09-24,2024-09-18,2024-10-01,Completed,OVERRUN
+MPLAD-0154,Education Improvement 154,Karnataka,Mysuru,Mysuru Parliamentary Constituency,PWD,Education,918000.0,1200000.0,2024-07-13,2025-07-08,2025-07-25,Completed,OVERRUN
+MPLAD-0155,Health Improvement 155,Maharashtra,Pune,Pune Parliamentary Constituency,PWD,Health,1692000.0,2089000.0,2023-03-17,2023-12-12,2023-12-30,Completed,OVERRUN
+MPLAD-0156,Roads Improvement 156,Karnataka,Bengaluru Urban,Bengaluru Urban Parliamentary Constituency,Urban Development,Roads,1232000.0,1712000.0,2024-03-10,2024-11-05,2024-11-08,Completed,OVERRUN
+MPLAD-0157,Education Improvement 157,Bihar,Patna,Patna Parliamentary Constituency,Rural Development,Education,1438000.0,1670000.0,2024-08-14,2025-08-09,2025-08-13,Completed,OVERRUN
+MPLAD-0158,Roads Improvement 158,West Bengal,Kolkata,Kolkata Parliamentary Constituency,Education Department,Roads,1267000.0,1601000.0,2024-09-13,2025-05-11,2025-05-20,Completed,OVERRUN
+MPLAD-0159,Education Improvement 159,Jharkhand,East Singhbhum,East Singhbhum Parliamentary Constituency,Health Department,Education,1171000.0,1652000.0,2024-03-19,2025-03-14,2025-03-29,Completed,OVERRUN
+MPLAD-0160,Water Supply Improvement 160,Telangana,Hyderabad,Hyderabad Parliamentary Constituency,Urban Development,Water Supply,1959000.0,2278000.0,2024-11-07,2025-09-03,2025-09-04,Completed,OVERRUN
+MPLAD-0161,Water Supply Improvement 161,Andhra Pradesh,Guntur,Guntur Parliamentary Constituency,Education Department,Water Supply,1278000.0,1687000.0,2025-02-10,2025-12-07,2025-12-08,Completed,OVERRUN
+MPLAD-0162,Water Supply Improvement 162,Maharashtra,Nashik,Nashik Parliamentary Constituency,Health Department,Water Supply,1717000.0,2053000.0,2024-08-15,2025-06-11,2025-06-16,Completed,OVERRUN
+MPLAD-0163,Roads Improvement 163,Odisha,Cuttack,Cuttack Parliamentary Constituency,Health Department,Roads,664000.0,683000.0,2024-01-06,2024-09-02,2024-09-20,Completed,HIGH_UTILIZATION
+MPLAD-0164,Sanitation Improvement 164,Bihar,Muzaffarpur,Muzaffarpur Parliamentary Constituency,Rural Development,Sanitation,543000.0,540000.0,2024-11-10,2025-06-08,2025-06-15,Completed,HIGH_UTILIZATION
+MPLAD-0165,Education Improvement 165,Chhattisgarh,Raipur,Raipur Parliamentary Constituency,Education Department,Education,1069000.0,1144000.0,2023-08-05,2024-07-30,2024-08-14,Completed,HIGH_UTILIZATION
+MPLAD-0166,Community Infrastructure Improvement 166,Madhya Pradesh,Jabalpur,Jabalpur Parliamentary Constituency,PWD,Community Infrastructure,1399000.0,1405000.0,2024-12-13,2026-02-06,2026-02-11,Completed,HIGH_UTILIZATION
+MPLAD-0167,Sanitation Improvement 167,Andhra Pradesh,Krishna,Krishna Parliamentary Constituency,Water Resources,Sanitation,651000.0,677000.0,2023-07-28,2024-02-23,2024-02-23,Completed,HIGH_UTILIZATION
+MPLAD-0168,Sanitation Improvement 168,Madhya Pradesh,Indore,Indore Parliamentary Constituency,Education Department,Sanitation,542000.0,533000.0,2023-09-16,2024-04-13,2024-04-30,Completed,HIGH_UTILIZATION
+MPLAD-0169,Community Infrastructure Improvement 169,Rajasthan,Jaipur,Jaipur Parliamentary Constituency,Education Department,Community Infrastructure,1283000.0,1346000.0,2023-09-25,2024-11-18,2024-11-27,Completed,HIGH_UTILIZATION
+MPLAD-0170,Community Infrastructure Improvement 170,Haryana,Hisar,Hisar Parliamentary Constituency,Rural Development,Community Infrastructure,919000.0,923000.0,2023-12-03,2025-01-26,2025-02-01,Completed,HIGH_UTILIZATION
+MPLAD-0171,Community Hall Renovation,Maharashtra,Pune,Pune Parliamentary Constituency,Rural Development,Community Infrastructure,1983000.0,1320000.0,2025-02-08,2025-11-05,2025-11-18,Completed,DUPLICATE
+MPLAD-0172,Community Hall Renovation,Maharashtra,Pune,Pune Parliamentary Constituency,Education Department,Community Infrastructure,1641000.0,1101000.0,2023-05-27,2024-05-21,2024-06-06,Completed,DUPLICATE
+MPLAD-0173,Community Hall Renovation,Maharashtra,Pune,Pune Parliamentary Constituency,Water Resources,Community Infrastructure,912000.0,613000.0,2023-01-18,2023-09-15,2023-09-24,Completed,DUPLICATE
+MPLAD-0174,Community Hall Renovation,Maharashtra,Pune,Pune Parliamentary Constituency,Health Department,Community Infrastructure,1043000.0,688000.0,2023-01-10,2024-03-05,2024-03-20,Completed,DUPLICATE
+MPLAD-0175,Community Hall Renovation,Maharashtra,Pune,Pune Parliamentary Constituency,Urban Development,Community Infrastructure,1022000.0,690000.0,2025-02-18,2025-10-16,2025-10-28,Completed,DUPLICATE
+MPLAD-0176,Community Hall Renovation,Maharashtra,Pune,Pune Parliamentary Constituency,PWD,Community Infrastructure,1197000.0,1028000.0,2023-12-13,2024-08-09,2024-08-27,Completed,DUPLICATE
+MPLAD-0177,Water Supply Improvement 177,Madhya Pradesh,Indore,Indore Parliamentary Constituency,Water Resources,Water Supply,1380000.0,,2023-05-25,2024-03-20,2024-03-23,Completed,DATA_QUALITY
+MPLAD-0178,Health Improvement 178,Assam,Dibrugarh,Dibrugarh Parliamentary Constituency,Education Department,Health,2091000.0,1501000.0,2024-08-02,not-a-date,2025-05-18,Completed,DATA_QUALITY
+MPLAD-0179,Health Improvement 179,Odisha,Puri,Puri Parliamentary Constituency,Education Department,Health,1339000.0,,2024-03-06,2024-12-01,2024-12-01,Completed,DATA_QUALITY
+MPLAD-0180,Education Improvement 180,Gujarat,Surat,Surat Parliamentary Constituency,Water Resources,Education,1603000.0,839000.0,2023-06-01,not-a-date,2024-06-07,Completed,DATA_QUALITY
+MPLAD-0181,Water Supply Improvement 181,Telangana,Nizamabad,Nizamabad Parliamentary Constituency,Education Department,Water Supply,4482000.0,6706000.0,2024-08-29,2025-06-25,2026-01-28,Delayed,MULTI_SIGNAL
+MPLAD-0182,Roads Improvement 182,Bihar,Muzaffarpur,Muzaffarpur Parliamentary Constituency,Water Resources,Roads,2357000.0,3326000.0,2023-12-18,2024-08-14,2025-05-08,Delayed,MULTI_SIGNAL
+MPLAD-0183,Roads Improvement 183,Haryana,Hisar,Hisar Parliamentary Constituency,Urban Development,Roads,2438000.0,3223000.0,2024-06-09,2025-02-04,2025-12-15,Delayed,MULTI_SIGNAL
+MPLAD-0184,Roads Improvement 184,Rajasthan,Jodhpur,Jodhpur Parliamentary Constituency,Urban Development,Roads,2464000.0,3007000.0,2023-07-06,2024-03-02,2024-08-23,Delayed,MULTI_SIGNAL
+MPLAD-0185,Roads Improvement 185,Karnataka,Bengaluru Urban,Bengaluru Urban Parliamentary Constituency,Rural Development,Roads,3011000.0,3850000.0,2023-04-11,2023-12-07,2024-05-27,Delayed,MULTI_SIGNAL
+MPLAD-0186,Education Improvement 186,Odisha,Ganjam,Ganjam Parliamentary Constituency,PWD,Education,3995000.0,4649000.0,2023-10-09,2024-10-03,2025-03-03,Delayed,MULTI_SIGNAL
+MPLAD-0187,Education Improvement 187,Uttar Pradesh,Lucknow,Lucknow Parliamentary Constituency,Education Department,Education,3497000.0,4554000.0,2025-01-24,2026-01-19,2026-07-21,Delayed,MULTI_SIGNAL
+MPLAD-0188,Roads Improvement 188,Assam,Jorhat,Jorhat Parliamentary Constituency,PWD,Roads,3352000.0,3953000.0,2023-07-29,2024-03-25,2024-10-16,Delayed,MULTI_SIGNAL

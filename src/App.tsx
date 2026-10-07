@@ -128,7 +128,7 @@ function Shell({ children }: { children: ReactNode }) {
     }).catch(() => {});
   }, []);
 
-  const visible = (path: string) => path !== '/upload' && path !== '/integration' || can('dataset:upload');
+  const visible = (_path: string) => true;
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
     if (search.trim()) navigate(`/projects?search=${encodeURIComponent(search.trim())}`);
