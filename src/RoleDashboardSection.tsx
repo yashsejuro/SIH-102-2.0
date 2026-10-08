@@ -653,16 +653,25 @@ export function RoleDashboardSection({
 function AdministrativeGovernanceTable() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     axios.get(`${API_BASE}/api/auth/users`)
       .then(res => setUsers(res.data.items || []))
-      .catch(() => setUsers([]))
+      .catch((err) => {
+        setUsers([]);
+        setError(err.response?.data?.detail || err.message || 'Unable to load user roster.');
+      })
       .finally(() => setLoading(false));
   }, []);
 
   return (
     <section className="panel" style={{ borderLeft: '4px solid var(--gold)' }}>
+      {error && (
+        <div className="notice" style={{ color: '#b91c1c', background: '#fef2f2', borderColor: '#fca5a5', marginBottom: 12 }}>
+          <span>⚠ {error}</span>
+        </div>
+      )}
       <div className="panel-head">
         <div>
           <div className="eyebrow" style={{ color: 'var(--gold)' }}>ADMINISTRATIVE GOVERNANCE</div>

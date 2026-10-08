@@ -344,6 +344,7 @@ function StateMap({
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null);
   const [generatingState, setGeneratingState] = useState<string | null>(null);
   const [generatedCases, setGeneratedCases] = useState<Record<string, { id: number; priority: string; title: string }>>({});
+  const [caseError, setCaseError] = useState<string | null>(null);
   const leaveTimeoutRef = useRef<number | null>(null);
   const isInsideTooltipRef = useRef(false);
   const hoveredRef = useRef<string | null>(null);
@@ -679,6 +680,7 @@ function StateMap({
     e.stopPropagation();
     if (generatingState) return;
 
+    setCaseError(null);
     setGeneratingState(stateName);
     try {
       let candidateProject: any = null;
@@ -690,8 +692,8 @@ function StateMap({
         if (records.length > 0) {
           candidateProject = records.slice().sort((a: any, b: any) => (b.risk_score || 0) - (a.risk_score || 0))[0];
         }
-      } catch {
-        // Fallback if projects request fails
+      } catch (err) {
+        console.warn('Candidate project fetch fallback for state', err);
       }
 
       if (!candidateProject) {
@@ -747,6 +749,7 @@ function StateMap({
         project_id: candidateProject.id,
         title: caseTitle,
         priority: priorityLevel,
+        status: 'OPEN',
         assigned_authority: candidateProject.agency || `${stateName} State Nodal Inspection Cell`,
         notes,
         state: stateName,
@@ -761,8 +764,9 @@ function StateMap({
           title: caseTitle,
         }
       }));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create audit case for state', err);
+      setCaseError(`Failed to create review case for ${stateName}: ${err.response?.data?.detail || err.message || 'Server error'}`);
     } finally {
       setGeneratingState(null);
     }
@@ -770,6 +774,12 @@ function StateMap({
 
   return (
     <div className="map-wrap">
+      {caseError && (
+        <div className="notice" style={{ color: '#b91c1c', background: '#fef2f2', borderColor: '#fca5a5', margin: '8px 12px' }}>
+          <span>⚠ {caseError}</span>
+          <button type="button" onClick={() => setCaseError(null)} style={{ background: 'transparent', border: 0, cursor: 'pointer', fontSize: 16 }}>×</button>
+        </div>
+      )}
       {/* Drill-down Navigation Header */}
       {isDrilledDown ? (
         <div className="drilldown-bar">
@@ -1819,74 +1829,6 @@ function DashboardPage() {
     }
   }, [user]);
 
-  // Dataset Undo Grace Period State & Live Countdown
-  const [undoStatus, setUndoStatus] = useState<any>(null);
-  const [undoSeconds, setUndoSeconds] = useState<number>(0);
-  const [isUndoing, setIsUndoing] = useState(false);
-  const [undoToast, setUndoToast] = useState('');
-  const [showUndoConfirmModal, setShowUndoConfirmModal] = useState(false);
-
-  const checkUndo = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/api/datasets/undo-status`);
-      setUndoStatus(res.data);
-      if (typeof res.data?.seconds_remaining === 'number') {
-        setUndoSeconds(res.data.seconds_remaining);
-      }
-    } catch {}
-  };
-
-  useEffect(() => {
-    checkUndo();
-  }, [selectedRunId]);
-
-  useEffect(() => {
-    if (undoSeconds <= 0) return;
-    const timer = setInterval(() => {
-      setUndoSeconds(s => {
-        if (s <= 1) {
-          clearInterval(timer);
-          checkUndo();
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [undoSeconds]);
-
-  const handleUndoDataset = async () => {
-    setIsUndoing(true);
-    try {
-      const res = await axios.post(`${API_BASE}/api/datasets/undo`);
-      setUndoToast(res.data?.message || 'Dataset reverted successfully.');
-      setShowUndoConfirmModal(false);
-      await checkUndo();
-      fetchDashboardData();
-    } catch (err: any) {
-      setUndoToast(err.response?.data?.error || 'Failed to undo dataset.');
-    } finally {
-      setIsUndoing(false);
-    }
-  };
-
-  const handleArmSimulatedDataset = async () => {
-    try {
-      const res = await axios.post(`${API_BASE}/api/datasets/simulate-upload`);
-      setUndoToast(res.data?.message || 'Sample uploaded dataset active with 15-minute grace period.');
-      await checkUndo();
-      fetchDashboardData();
-    } catch {
-      setUndoToast('Failed to activate sample dataset.');
-    }
-  };
-
-  const formatCountdown = (totalSec: number) => {
-    const mins = Math.floor(totalSec / 60);
-    const secs = totalSec % 60;
-    return `${mins}m ${String(secs).padStart(2, '0')}s`;
-  };
-
   const handleDownloadStateCSV = async () => {
     setIsExporting(true);
     try {
@@ -2071,196 +2013,34 @@ function DashboardPage() {
           </button>
         </div>
       )}
-      {/* Toast Feedback */}
-      {undoToast && (
-        <div className="notice" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ecfdf5', borderColor: '#a7f3d0' }}>
-          <span style={{ color: '#065f46', fontWeight: 600 }}>✓ {undoToast}</span>
-          <button type="button" onClick={() => setUndoToast('')} style={{ background: 'transparent', border: 0, cursor: 'pointer', fontSize: 16 }}>×</button>
-        </div>
-      )}
-
-      {/* Dataset Rollback / Undo Grace Period Banner */}
-      {undoStatus?.has_undoable_dataset && (
-        <div style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 8, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span style={{ fontSize: 26 }}>📁</span>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <strong style={{ color: '#1e40af', fontSize: 13 }}>
-                  Active Uploaded Dataset: {undoStatus.dataset_name}
-                </strong>
-                <span style={{ background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, border: '1px solid #bfdbfe' }}>
-                  ⏱️ {formatCountdown(undoSeconds)} REMAINING
-                </span>
-                <span style={{ background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
-                  15-MIN GRACE PERIOD
-                </span>
-              </div>
-              <span style={{ color: '#2563eb', fontSize: 12, display: 'block', marginTop: 3 }}>
-                Undo grace period is currently active. You can easily remove this dataset to restore the canonical baseline register.
+      {/* Active Dataset Register Banner */}
+      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 22 }}>🏛️</span>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <strong style={{ color: '#1e293b', fontSize: 13 }}>
+                Active Dataset: Verified Canonical Baseline Register
+              </strong>
+              <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, border: '1px solid #bbf7d0' }}>
+                ✓ VERIFIED BASELINE
               </span>
             </div>
+            <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginTop: 2 }}>
+              Canonical statutory records loaded. Upload custom registers or ingest multi-source workbooks to audit.
+            </span>
           </div>
-          <button
-            type="button"
-            className="button secondary"
-            style={{ color: '#b91c1c', borderColor: '#fca5a5', background: '#ffffff', fontWeight: 700, fontSize: 12, cursor: 'pointer', padding: '8px 16px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
-            onClick={() => setShowUndoConfirmModal(true)}
-            disabled={isUndoing}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Link
+            to="/upload"
+            className="button primary"
+            style={{ fontSize: 11, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
-            {isUndoing ? 'Reverting Ingestion...' : 'Remove Dataset (Undo Ingestion)'}
-          </button>
+            + Ingest Custom Files
+          </Link>
         </div>
-      )}
-
-      {!undoStatus?.has_undoable_dataset && (
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 22 }}>🏛️</span>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <strong style={{ color: '#1e293b', fontSize: 13 }}>
-                  Active Dataset: Verified Canonical Baseline Register
-                </strong>
-                <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, border: '1px solid #bbf7d0' }}>
-                  ✓ VERIFIED BASELINE (180 PROJECTS)
-                </span>
-              </div>
-              <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginTop: 2 }}>
-                Canonical statutory records loaded. Upload custom registers or ingest test files to audit with a 15-minute undo grace period.
-              </span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
-              type="button"
-              className="button secondary"
-              style={{ fontSize: 11, padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
-              onClick={handleArmSimulatedDataset}
-              title="Loads a sample dataset to test the 15-minute undo window and removal modal"
-            >
-              ⚡ Ingest Test Dataset (Activate Undo Window)
-            </button>
-            <Link
-              to="/upload"
-              className="button primary"
-              style={{ fontSize: 11, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-            >
-              + Ingest Custom Files
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* Dataset Rollback / Removal Confirmation Modal */}
-      {showUndoConfirmModal && (
-        <div
-          className="modal-backdrop"
-          style={{ zIndex: 9999 }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="undo-dataset-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !isUndoing) {
-              setShowUndoConfirmModal(false);
-            }
-          }}
-        >
-          <section
-            className="modal panel"
-            style={{
-              maxWidth: 540,
-              width: '92%',
-              background: '#ffffff',
-              borderRadius: 12,
-              padding: '24px 28px',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
-            }}
-          >
-            <button
-              className="modal-close"
-              onClick={() => setShowUndoConfirmModal(false)}
-              disabled={isUndoing}
-              title="Close modal"
-              style={{ fontSize: 20, cursor: 'pointer', background: 'transparent', border: 0, color: 'var(--muted)' }}
-            >
-              ×
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 26, lineHeight: 1 }}>⚠️</span>
-              <div className="eyebrow" style={{ color: '#b91c1c', fontWeight: 800, letterSpacing: '0.08em' }}>
-                DATASET ROLLBACK CONFIRMATION
-              </div>
-            </div>
-
-            <h2 id="undo-dataset-modal-title" style={{ fontSize: 20, margin: '4px 0 10px', color: 'var(--deep)', fontWeight: 700 }}>
-              Remove Ingested Dataset?
-            </h2>
-
-            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
-              Are you sure you want to remove this dataset during the 15-minute grace period? This action will immediately revert all dashboard metrics, project registers, and anomaly detection results back to the verified baseline data.
-            </p>
-
-            {/* Dataset Details Card */}
-            <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 8, padding: '14px 16px', marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
-                <span style={{ color: '#991b1b', fontWeight: 600 }}>Target Dataset:</span>
-                <span style={{ color: '#7f1d1d', fontWeight: 700, wordBreak: 'break-all' }}>{undoStatus?.dataset_name || 'Uploaded Register'}</span>
-              </div>
-              {undoStatus?.records_count && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
-                  <span style={{ color: '#991b1b', fontWeight: 600 }}>Records Ingested:</span>
-                  <span style={{ color: '#7f1d1d', fontWeight: 700 }}>{undoStatus.records_count} records</span>
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-                <span style={{ color: '#991b1b', fontWeight: 600 }}>Remaining Grace Window:</span>
-                <span style={{ color: '#dc2626', fontWeight: 800, fontFamily: 'monospace', fontSize: 13 }}>
-                  ⏱️ {formatCountdown(undoSeconds)}
-                </span>
-              </div>
-            </div>
-
-            {/* Safety Guarantee Note */}
-            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px', marginBottom: 22, fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
-              🛡️ <strong>Safety Guarantee:</strong> Reverting will cleanly restore baseline canonical records. Historical government audits and official sanctions remain completely intact.
-            </div>
-
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center' }}>
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => setShowUndoConfirmModal(false)}
-                disabled={isUndoing}
-                style={{ fontWeight: 600, padding: '8px 16px', cursor: 'pointer' }}
-              >
-                Cancel (Keep Dataset)
-              </button>
-              <button
-                type="button"
-                className="button"
-                onClick={handleUndoDataset}
-                disabled={isUndoing}
-                style={{
-                  background: '#dc2626',
-                  color: '#ffffff',
-                  borderColor: '#b91c1c',
-                  fontWeight: 700,
-                  padding: '8px 18px',
-                  cursor: isUndoing ? 'not-allowed' : 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                {isUndoing ? 'Reverting Ingestion...' : '↺ Yes, Remove Dataset'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+      </div>
 
       {/* Role-Specific Executive Intelligence Section with Unique Metrics & Gated Actions */}
       {user && (
@@ -3402,7 +3182,15 @@ function ProjectDetailPage() {
   const [fraudEvidence, setFraudEvidence] = useState('');
   const [loadError, setLoadError] = useState('');
   const params = { run_id: runId || undefined };
-  const reloadAuditFile = async () => setAuditFile((await axios.get(`${API_BASE}/api/projects/${id}/audit-file`, { params })).data);
+  const reloadAuditFile = async () => {
+    const res = await axios.get(`${API_BASE}/api/projects/${id}/audit-file`, { params });
+    setAuditFile(res.data);
+    if (Array.isArray(res.data?.notes)) {
+      setProjectNotes(res.data.notes.map((n: any) => n.note || n).join('\n\n'));
+    } else if (typeof res.data?.notes === 'string') {
+      setProjectNotes(res.data.notes);
+    }
+  };
 
   useEffect(() => { 
     Promise.all([
@@ -3417,7 +3205,11 @@ function ProjectDetailPage() {
       setExplanation(explanationResponse.data);
       setSimilar(similarResponse.data.items || []);
       setAuditFile(auditResponse.data);
-      if (auditResponse.data?.notes) setProjectNotes(auditResponse.data.notes);
+      if (Array.isArray(auditResponse.data?.notes)) {
+        setProjectNotes(auditResponse.data.notes.map((n: any) => n.note || n).join('\n\n'));
+      } else if (typeof auditResponse.data?.notes === 'string') {
+        setProjectNotes(auditResponse.data.notes);
+      }
       setCompliance(complianceResponse.data.items || []);
       setFraudRisk(fraudResponse.data);
     }).catch(error => setLoadError(error instanceof Error ? error.message : 'Unable to load this project.'));
@@ -3429,7 +3221,7 @@ function ProjectDetailPage() {
   const saveProjectNotes = async () => {
     setSavingNotes(true);
     try {
-      await axios.post(`${API_BASE}/api/projects/${project.id}/notes`, { notes: projectNotes });
+      await axios.post(`${API_BASE}/api/projects/${project.id}/audit-notes`, { note: projectNotes }, { params });
       await reloadAuditFile();
       setSaved('Auditor notes saved to project file');
     } catch {
@@ -3444,6 +3236,7 @@ function ProjectDetailPage() {
       project_id: project.id,
       title: `Review: ${project.project_name}`,
       priority: project.risk_level === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
+      status: 'OPEN',
       assigned_authority: authority,
       notes: notes || projectNotes
     }); 
@@ -3690,6 +3483,27 @@ const DEMO_PERSONAS = [
   },
 ];
 
+const toBackendCaseStatus = (status: string | undefined): 'OPEN' | 'UNDER_REVIEW' | 'ESCALATED' | 'RESOLVED' => {
+  if (!status) return 'OPEN';
+  const s = status.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (s === 'PENDING_REVIEW' || s === 'OPEN') return 'OPEN';
+  if (s === 'UNDER_REVIEW') return 'UNDER_REVIEW';
+  if (s === 'ESCALATED') return 'ESCALATED';
+  if (s === 'RESOLVED' || s === 'CLOSED') return 'RESOLVED';
+  return 'OPEN';
+};
+
+const toDisplayCaseStatus = (status: string | undefined): string => {
+  const backend = toBackendCaseStatus(status);
+  switch (backend) {
+    case 'OPEN': return 'Open';
+    case 'UNDER_REVIEW': return 'Under Review';
+    case 'ESCALATED': return 'Escalated';
+    case 'RESOLVED': return 'Resolved';
+    default: return 'Open';
+  }
+};
+
 function CasesPage() { 
   const [cases, setCases] = useState<AuditCase[]>([]); 
   const [loading, setLoading] = useState(true);
@@ -3703,6 +3517,7 @@ function CasesPage() {
     project_id: '',
     title: '',
     priority: 'HIGH',
+    status: 'OPEN',
     assigned_authority: 'District audit officer',
     notes: '',
   });
@@ -3721,8 +3536,15 @@ function CasesPage() {
   if (loading) return <div className="page-loading">Loading audit cases...</div>; 
 
   const update = async (id: number, status: string) => { 
-    await axios.patch(`${API_BASE}/api/audit-cases/${id}`, { status }); 
-    refresh(); 
+    const backendStatus = toBackendCaseStatus(status);
+    try {
+      await axios.patch(`${API_BASE}/api/audit-cases/${id}`, { status: backendStatus }); 
+      setSavedNotice(`Case status updated to ${toDisplayCaseStatus(backendStatus)}`);
+      setTimeout(() => setSavedNotice(''), 4000);
+      refresh(); 
+    } catch {
+      setSavedNotice('Failed to update case status.');
+    }
   }; 
 
   const openCaseNotes = (item: AuditCase) => {
@@ -3738,7 +3560,7 @@ function CasesPage() {
       await axios.patch(`${API_BASE}/api/audit-cases/${selectedCase.id}`, { notes: caseNotes });
       setSavedNotice(`Notes saved for CASE-${String(selectedCase.id).padStart(4, '0')}`);
       setTimeout(() => setSavedNotice(''), 4000);
-      refresh();
+      refresh(); 
       // Update selected case notes locally
       setSelectedCase(prev => prev ? { ...prev, notes: caseNotes } : null);
     } catch {
@@ -3752,7 +3574,10 @@ function CasesPage() {
     e.preventDefault();
     if (!newCaseDraft.project_id) return;
     try {
-      await axios.post(`${API_BASE}/api/audit-cases`, newCaseDraft);
+      await axios.post(`${API_BASE}/api/audit-cases`, {
+        ...newCaseDraft,
+        status: toBackendCaseStatus(newCaseDraft.status),
+      });
       setSavedNotice('New audit case registered with voice notes.');
       setTimeout(() => setSavedNotice(''), 4000);
       setNewCaseModal(false);
@@ -3760,6 +3585,7 @@ function CasesPage() {
         project_id: '',
         title: '',
         priority: 'HIGH',
+        status: 'OPEN',
         assigned_authority: 'District audit officer',
         notes: '',
       });
@@ -3771,7 +3597,7 @@ function CasesPage() {
 
   const filteredCases = statusFilter === 'ALL'
     ? cases
-    : cases.filter(item => item.status === statusFilter || (statusFilter === 'OPEN' && item.status === 'Pending Review'));
+    : cases.filter(item => toBackendCaseStatus(item.status) === statusFilter);
 
   return (
     <div className="page-stack">
@@ -3806,14 +3632,19 @@ function CasesPage() {
           <span>ALL CASES</span>
           <strong>{cases.length}</strong>
         </div>
-        {['OPEN', 'UNDER_REVIEW', 'ESCALATED', 'RESOLVED'].map(status => (
+        {[
+          { key: 'OPEN', label: 'Open' },
+          { key: 'UNDER_REVIEW', label: 'Under Review' },
+          { key: 'ESCALATED', label: 'Escalated' },
+          { key: 'RESOLVED', label: 'Resolved' },
+        ].map(({ key, label }) => (
           <div
-            key={status}
-            style={{ cursor: 'pointer', background: statusFilter === status ? '#f0f7f4' : undefined }}
-            onClick={() => setStatusFilter(statusFilter === status ? 'ALL' : status)}
+            key={key}
+            style={{ cursor: 'pointer', background: statusFilter === key ? '#f0f7f4' : undefined }}
+            onClick={() => setStatusFilter(statusFilter === key ? 'ALL' : key)}
           >
-            <span>{status.replace('_', ' ')}</span>
-            <strong>{cases.filter(item => item.status === status || (status === 'OPEN' && item.status === 'Pending Review')).length}</strong>
+            <span>{label.toUpperCase()}</span>
+            <strong>{cases.filter(item => toBackendCaseStatus(item.status) === key).length}</strong>
           </div>
         ))}
       </div>
@@ -3826,7 +3657,7 @@ function CasesPage() {
               <div className="eyebrow" style={{ color: 'var(--teal)' }}>ACTIVE AUDIT CASE INSPECTION</div>
               <h2>CASE-{String(selectedCase.id).padStart(4, '0')}: {selectedCase.title}</h2>
               <p>
-                Project: <strong>PROJECT-{selectedCase.project_id}</strong> · Authority: <strong>{selectedCase.assigned_authority || 'Unassigned'}</strong> · Status: <strong>{selectedCase.status}</strong>
+                Project: <strong>PROJECT-{selectedCase.project_id}</strong> · Authority: <strong>{selectedCase.assigned_authority || 'Unassigned'}</strong> · Status: <strong>{toDisplayCaseStatus(selectedCase.status)}</strong>
               </p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -3890,12 +3721,11 @@ function CasesPage() {
                       </td>
                       <td>{item.assigned_authority || 'Unassigned'}</td>
                       <td>
-                        <select className="inline-select" value={item.status} onChange={event => update(item.id, event.target.value)}>
-                          <option>OPEN</option>
-                          <option>UNDER_REVIEW</option>
-                          <option>ESCALATED</option>
-                          <option>RESOLVED</option>
-                          <option>Pending Review</option>
+                        <select className="inline-select" value={toBackendCaseStatus(item.status)} onChange={event => update(item.id, event.target.value)}>
+                          <option value="OPEN">Open</option>
+                          <option value="UNDER_REVIEW">Under Review</option>
+                          <option value="ESCALATED">Escalated</option>
+                          <option value="RESOLVED">Resolved</option>
                         </select>
                       </td>
                       <td>
@@ -3959,7 +3789,7 @@ function CasesPage() {
             </p>
 
             <form onSubmit={createNewCase}>
-              <div className="provision-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div className="provision-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div className="provision-field">
                   <label className="provision-label">Project ID *</label>
                   <input
@@ -3982,6 +3812,19 @@ function CasesPage() {
                     <option value="HIGH">HIGH</option>
                     <option value="MEDIUM">MEDIUM</option>
                     <option value="LOW">LOW</option>
+                  </select>
+                </div>
+                <div className="provision-field">
+                  <label className="provision-label">Status</label>
+                  <select
+                    className="provision-select"
+                    value={toBackendCaseStatus(newCaseDraft.status)}
+                    onChange={e => setNewCaseDraft({ ...newCaseDraft, status: e.target.value })}
+                  >
+                    <option value="OPEN">Open</option>
+                    <option value="UNDER_REVIEW">Under Review</option>
+                    <option value="ESCALATED">Escalated</option>
+                    <option value="RESOLVED">Resolved</option>
                   </select>
                 </div>
               </div>
@@ -5433,11 +5276,15 @@ function AgenciesPage() {
 function ReconciliationPage() {
   const [data, setData] = useState<any>(null);
   const [filter, setFilter] = useState<'ALL' | 'HIGH_OVERRUN' | 'OVER_20_PCT'>('ALL');
-  const [inquiryLoadingId, setInquiryLoadingId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string>('');
 
   useEffect(() => {
-    axios.get(`${API_BASE}/api/reconciliation`).then(response => setData(response.data));
+    axios.get(`${API_BASE}/api/reconciliation`)
+      .then(response => setData(response.data))
+      .catch((err) => {
+        console.error('Failed to load reconciliation data', err);
+        setData({ mismatches: [] });
+      });
   }, []);
 
   if (!data) return <div className="page-loading">Loading fund checks...</div>;
@@ -5479,23 +5326,6 @@ function ReconciliationPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleRaiseInquiry = async (project: any) => {
-    const excess = Math.max(0, (project.expenditure || 0) - (project.sanction_amount || 0));
-    setInquiryLoadingId(project.project_id);
-    try {
-      const res = await axios.post(`${API_BASE}/api/reconciliation/inquiry`, {
-        project_id: project.project_id,
-        excess_amount: excess,
-        notes: `Formal audit inquiry raised for project ${project.project_code || project.project_id}. Sanctioned ceiling: ₹${(project.sanction_amount || 0).toLocaleString('en-IN')}; Actual expenditure: ₹${(project.expenditure || 0).toLocaleString('en-IN')}; Unauthorized excess: ₹${excess.toLocaleString('en-IN')}. Revised administrative sanction or recovery required.`,
-      });
-      setNotice(`Audit case #${res.data?.case?.id || ''} created: Formal Overrun Inquiry issued for ${project.project_name || project.project_code}.`);
-    } catch {
-      setNotice('Could not raise audit inquiry. Please try again.');
-    } finally {
-      setInquiryLoadingId(null);
-    }
-  };
-
   return (
     <div className="page-stack">
       <PageTitle
@@ -5519,7 +5349,7 @@ function ReconciliationPage() {
       </div>
 
       <div className="notice" style={{ background: '#f8fafc', borderColor: '#cbd5e1', color: '#334155' }}>
-        <strong>How to read this workspace:</strong> Under financial rules (GFR 149 & State PWD codes), public funds cannot be disbursed beyond approved sanction without revised administrative approval. The button below lets auditors issue a formal inquiry with 1 click.
+        <strong>How to read this workspace:</strong> Under financial rules (GFR 149 & State PWD codes), public funds cannot be disbursed beyond approved sanction without revised administrative approval. Inspect project details to review vouchers and progress.
       </div>
 
       <section className="panel table-panel">
@@ -5585,19 +5415,9 @@ function ReconciliationPage() {
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <Link to={`/projects/${item.project_id}`} className="button ghost" style={{ fontSize: 11, padding: '3px 8px', height: 'auto', minHeight: 26 }}>
-                            Inspect →
+                          <Link to={`/projects/${item.project_id}`} className="button secondary" style={{ fontSize: 11, padding: '3px 10px', height: 'auto', minHeight: 26 }}>
+                            Inspect Project →
                           </Link>
-                          <button
-                            type="button"
-                            className="button primary"
-                            style={{ fontSize: 11, padding: '3px 8px', height: 'auto', minHeight: 26 }}
-                            disabled={inquiryLoadingId === item.project_id}
-                            onClick={() => handleRaiseInquiry(item)}
-                            title="Register formal audit inquiry and notify agency"
-                          >
-                            {inquiryLoadingId === item.project_id ? 'Issuing...' : 'Raise Inquiry'}
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -5622,54 +5442,22 @@ function DuplicatesPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'CONFIRMED' | 'INSPECT' | 'CLEARED'>('ALL');
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string>('');
 
   const fetchDuplicates = () => {
     setLoading(true);
     axios.get(`${API_BASE}/api/duplicates`)
       .then(response => setItems(response.data.items || []))
-      .catch(() => setItems([]))
+      .catch((err) => {
+        console.error('Failed to load duplicate pairs', err);
+        setItems([]);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchDuplicates();
   }, []);
-
-  const handleAction = async (pairId: string, actionType: 'CONFIRM' | 'INSPECT' | 'CLEAR') => {
-    setActionLoadingId(pairId);
-    try {
-      const res = await axios.post(`${API_BASE}/api/duplicates/action`, {
-        pair_id: pairId,
-        action: actionType,
-        officer: 'District Vigilance Unit',
-      });
-      // Update local state immediately
-      setItems(prev => prev.map(item => {
-        if (item.id === pairId) {
-          return {
-            ...item,
-            status: res.data.record.status,
-            action_details: res.data.record,
-          };
-        }
-        return item;
-      }));
-
-      if (actionType === 'CONFIRM') {
-        setNotice('Confirmed as duplicate work! Double-billing alert and case logged in Audit Cases.');
-      } else if (actionType === 'INSPECT') {
-        setNotice('Flagged for site inspection! Field measurement task generated in Audit Cases.');
-      } else {
-        setNotice('Marked as legitimate distinct works / separate phases.');
-      }
-    } catch {
-      setNotice('Failed to update duplicate decision. Please try again.');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
 
   const exportDuplicatesCSV = () => {
     const headers = ['Pair ID', 'Project A Code', 'Project A Name', 'Project A Sanction', 'Project B Code', 'Project B Name', 'Project B Sanction', 'Similarity %', 'Status', 'Match Reasons'];
@@ -5774,7 +5562,6 @@ function DuplicatesPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {filteredItems.map((item, index) => {
               const pairId = item.id || `${item.project_a?.id}-${item.project_b?.id}`;
-              const isWorking = actionLoadingId === pairId;
 
               return (
                 <div
@@ -5846,37 +5633,6 @@ function DuplicatesPage() {
                   <div style={{ fontSize: 11, color: 'var(--muted)', background: '#fafbfc', padding: '8px 12px', borderRadius: 4 }}>
                     <strong>Matching indicators: </strong>
                     {(item.reasons || []).join(' · ') || 'Identical category, close sanction amounts, and overlapping execution timeline in same district.'}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', flexWrap: 'wrap', paddingTop: 6 }}>
-                    <button
-                      type="button"
-                      className="button ghost"
-                      style={{ fontSize: 11, padding: '4px 10px', height: 'auto', minHeight: 28 }}
-                      disabled={isWorking}
-                      onClick={() => handleAction(pairId, 'CLEAR')}
-                    >
-                      Mark Cleared (Distinct Phase)
-                    </button>
-                    <button
-                      type="button"
-                      className="button secondary"
-                      style={{ fontSize: 11, padding: '4px 10px', height: 'auto', minHeight: 28, borderColor: '#fb923c', color: '#c2410c' }}
-                      disabled={isWorking}
-                      onClick={() => handleAction(pairId, 'INSPECT')}
-                    >
-                      {isWorking ? 'Processing...' : 'Flag for Site Inspection'}
-                    </button>
-                    <button
-                      type="button"
-                      className="button primary"
-                      style={{ fontSize: 11, padding: '4px 10px', height: 'auto', minHeight: 28, background: '#dc2626', borderColor: '#b91c1c' }}
-                      disabled={isWorking}
-                      onClick={() => handleAction(pairId, 'CONFIRM')}
-                    >
-                      {isWorking ? 'Processing...' : 'Confirm Double-Billing'}
-                    </button>
                   </div>
                 </div>
               );

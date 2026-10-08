@@ -166,6 +166,7 @@ export default function ProjectStatusDashboard({
   const [searchQuery, setSearchQuery] = useState('');
   const [projectsList, setProjectsList] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'financials' | 'distribution' | 'delay'>('financials');
 
   const categories = [
@@ -183,6 +184,7 @@ export default function ProjectStatusDashboard({
   // Fetch Dashboard High-level Aggregates
   const fetchDashboard = () => {
     setLoading(true);
+    setError(null);
     axios
       .get(`${API_BASE}/api/dashboard`, {
         params: {
@@ -195,6 +197,7 @@ export default function ProjectStatusDashboard({
       })
       .catch((err) => {
         console.error('Failed to load dashboard:', err);
+        setError(err.response?.data?.detail || err.message || 'Failed to load dashboard data.');
       })
       .finally(() => setLoading(false));
   };
@@ -222,6 +225,7 @@ export default function ProjectStatusDashboard({
       })
       .catch((err) => {
         console.error('Failed to fetch projects list:', err);
+        setError(err.response?.data?.detail || err.message || 'Failed to fetch projects list.');
       })
       .finally(() => setProjectsLoading(false));
   }, [selectedStatus, selectedState, selectedCategory, searchQuery]);
@@ -381,6 +385,12 @@ export default function ProjectStatusDashboard({
   return (
     <div className="page-stack">
       {/* Header Banner */}
+      {error && (
+        <div className="notice" style={{ color: '#b91c1c', background: '#fef2f2', borderColor: '#fca5a5', marginBottom: 16 }}>
+          <span>⚠ {error}</span>
+          <button type="button" onClick={() => setError(null)} style={{ background: 'transparent', border: 0, cursor: 'pointer', fontSize: 16 }}>×</button>
+        </div>
+      )}
       <div className="page-heading">
         <div>
           <div className="eyebrow">NATIONAL AUDIT & SURVEILLANCE · MPLADS</div>

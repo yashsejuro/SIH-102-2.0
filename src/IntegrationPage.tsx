@@ -15,18 +15,23 @@ const labels: Record<string, string> = {
 export default function IntegrationPage() {
   const [run, setRun] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const location = useLocation();
   const runId = new URLSearchParams(location.search).get('run_id');
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     const request = runId
       ? axios.get(`${API_BASE}/api/analysis-runs/${runId}`)
       : axios.get(`${API_BASE}/api/analysis-runs/active`);
 
     request
       .then(response => setRun(response.data))
-      .catch(() => setRun(null))
+      .catch((err) => {
+        setRun(null);
+        setError(err.response?.data?.detail || err.message || 'Unable to load dataset lineage.');
+      })
       .finally(() => setLoading(false));
   }, [runId]);
 
@@ -48,6 +53,11 @@ export default function IntegrationPage() {
   if (!run) {
     return (
       <div className="page-stack">
+        {error && (
+          <div className="notice" style={{ color: '#b91c1c', background: '#fef2f2', borderColor: '#fca5a5', marginBottom: 12 }}>
+            <span>⚠ {error}</span>
+          </div>
+        )}
         <div className="page-heading simple">
           <div>
             <div className="eyebrow">DATA INTEGRATION</div>

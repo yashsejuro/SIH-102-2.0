@@ -15,6 +15,7 @@ export default function LandingPage() {
     activeAlerts: number;
   } | null>(null);
   const [loggingInRole, setLoggingInRole] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string>('');
 
   useEffect(() => {
     axios
@@ -77,13 +78,14 @@ export default function LandingPage() {
       },
     };
 
+    setLoginError('');
     try {
       if (demoPayloads[role]) {
         await login(demoPayloads[role]);
       }
       navigate('/dashboard');
-    } catch {
-      navigate('/dashboard');
+    } catch (err: any) {
+      setLoginError(err.response?.data?.detail || err.message || `Failed to sign in as ${role}. Please check credentials.`);
     } finally {
       setLoggingInRole(null);
     }
@@ -185,6 +187,12 @@ export default function LandingPage() {
               </svg>
             </a>
           </div>
+
+          {loginError && (
+            <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '10px 16px', borderRadius: 8, margin: '14px 0', fontSize: 13, fontWeight: 600 }}>
+              ⚠ {loginError}
+            </div>
+          )}
 
           {/* Quick Persona Launchers for Judges */}
           {!user && (

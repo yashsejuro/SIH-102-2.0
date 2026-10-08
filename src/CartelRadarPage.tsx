@@ -94,6 +94,7 @@ export function CartelRadarPage() {
   // Case Registration Action State
   const [creatingCaseFor, setCreatingCaseFor] = useState<string | null>(null);
   const [createdCaseInfo, setCreatedCaseInfo] = useState<{ id: number; title: string } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Fetch Cartel Data based on chosen source
   const loadCartelData = async (sourcePreference?: 'BENCHMARK' | 'UPLOADED') => {
@@ -280,27 +281,32 @@ TND-WB-2026-309,Embankment Reconstruction & Geo-Textile Layer,Eastern Geo-Infra 
   };
 
   const handleResetToBenchmark = async () => {
+    setActionError(null);
     try {
       await axios.post(`${API_BASE}/api/forensics/cartels/reset`);
       await loadCartelData('BENCHMARK');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to reset dataset:', err);
+      setActionError(err.response?.data?.detail || err.message || 'Failed to reset dataset to benchmark.');
     }
   };
 
   const handleCreateCaseForRing = async (ring: CartelRing) => {
     setCreatingCaseFor(ring.id);
+    setActionError(null);
     try {
       const res = await axios.post(`${API_BASE}/api/audit-cases`, {
         project_id: 14,
         title: `Collusion & Syndicate Inquiry: ${ring.name}`,
         priority: 'CRITICAL',
+        status: 'OPEN',
         assigned_authority: 'Central Vigilance Officer / Competition Bureau',
         notes: `Cartel Radar identified ${ring.contract_count} rigged tenders totaling ₹${(ring.total_pooled_value / 10000000).toFixed(2)} Cr. Indicators: ${ring.flags.join('; ')}. Statutory grounds: GFR Rule 144 & Section 3(3) Competition Act 2002.`,
       });
       setCreatedCaseInfo({ id: res.data.id, title: res.data.title });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create audit case for cartel:', err);
+      setActionError(err.response?.data?.detail || err.message || 'Failed to create audit case for cartel ring.');
     } finally {
       setCreatingCaseFor(null);
     }
@@ -488,6 +494,26 @@ TND-WB-2026-309,Embankment Reconstruction & Geo-Textile Layer,Eastern Geo-Infra 
       </div>
 
       {/* Case Created Success Banner */}
+      {actionError && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-3 text-xs text-rose-950 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="w-6 h-6 rounded-full bg-rose-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              !
+            </span>
+            <div>
+              <span className="font-bold text-rose-900">Operation Failed:</span> {actionError}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="text-rose-700 hover:text-rose-900 font-bold px-2 py-1"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {createdCaseInfo && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950 shadow-sm animate-fadeIn">
           <div className="flex items-center gap-2.5">
